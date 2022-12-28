@@ -8,15 +8,12 @@
     "moduleResolution": "Node",
     "outDir": "dist",
     "baseUrl": "src/",
-    "inlineSources": true,
-    "sourceMap": true,
     "strict": true,
     "experimentalDecorators": true,
     "noImplicitReturns": true,
     "allowSyntheticDefaultImports": true,
     "allowUnreachableCode": false,
     "resolveJsonModule": true,
-    "esModuleInterop": true
   },
   "include": ["src/**/*"],
   "exclude": [
