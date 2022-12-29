@@ -1,3 +1,6 @@
 [submodule "sensitive"]
 	path = sensitive
 	url = git@github.com:martydingo/screeps-typescript-sensitive.git
+[submodule "src/configuration"]
+	path = src/configuration
+	url = git@github.com:martydingo/screeps-typescript-configuration.git
