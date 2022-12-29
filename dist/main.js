@@ -198,7 +198,7 @@ class BuildConstructionSiteJob {
     }
 }
 
-const roomsToAvoid = [""];
+const roomsToAvoid = [];
 
 const myScreepsUsername = "marty";
 
@@ -3737,9 +3737,9 @@ class ScoutRoomJob {
     }
 }
 
-const roomsToClaim = [""];
+const roomsToClaim = [];
 
-const roomsToMine = [""];
+const roomsToMine = [];
 
 const roomOperations = {
     generateRoomsArray(roomOperation) {
