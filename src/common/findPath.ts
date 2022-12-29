@@ -4,8 +4,8 @@ import { myScreepsUsername } from "configuration/user";
 export const findPath = {
   findClearTerrain(roomName: string): RoomPosition {
     const roomTerrainMatrix = Game.rooms[roomName].getTerrain();
-    for (let x = 2; x < 50; x++) {
-      for (let y = 2; y < 50; y++) {
+    for (let x = 15; x < 35; x++) {
+      for (let y = 15; y < 35; y++) {
         if (roomTerrainMatrix.get(x, y) === 0) {
           return new RoomPosition(x, y, roomName);
         }

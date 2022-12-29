@@ -200,13 +200,13 @@ class BuildConstructionSiteJob {
 
 const roomsToAvoid = [];
 
-const myScreepsUsername = "marty";
+const myScreepsUsername = "Marty";
 
 const findPath = {
     findClearTerrain(roomName) {
         const roomTerrainMatrix = Game.rooms[roomName].getTerrain();
-        for (let x = 2; x < 50; x++) {
-            for (let y = 2; y < 50; y++) {
+        for (let x = 15; x < 35; x++) {
+            for (let y = 15; y < 35; y++) {
                 if (roomTerrainMatrix.get(x, y) === 0) {
                     return new RoomPosition(x, y, roomName);
                 }
@@ -991,7 +991,7 @@ class ScoutRoomCreep extends BaseCreep {
     runCreep(creep) {
         this.moveHome(creep);
         if (creep.memory.status === "working") {
-            this.moveCreep(creep, findPath.findClearTerrain(creep.room.name));
+            this.moveCreep(creep, findPath.findClearTerrain(creep.memory.room));
         }
     }
 }

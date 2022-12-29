@@ -9,7 +9,7 @@ export class ScoutRoomCreep extends BaseCreep {
   private runCreep(creep: Creep) {
     this.moveHome(creep);
     if (creep.memory.status === "working") {
-      this.moveCreep(creep, findPath.findClearTerrain(creep.room.name));
+      this.moveCreep(creep, findPath.findClearTerrain(creep.memory.room));
     }
   }
 }
