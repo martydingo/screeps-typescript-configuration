@@ -8,13 +8,49 @@ export class BaseCreep {
   }
   public checkIfFull(creep: Creep, resource: ResourceConstant): void {
     if (creep.memory.status === "fetchingResource") {
-      if (creep.store[resource] === creep.store.getCapacity(resource)) {
+      if (creep.store.getFreeCapacity(resource) === 0) {
         creep.memory.status = "working";
       }
     } else if (creep.memory.status === "working") {
       if (creep.store[resource] === 0) {
         creep.memory.status = "fetchingResource";
       }
+    }
+  }
+  public boostBodyParts(creep: Creep, bodyPart: BodyPartConstant, mineral: MineralBoostConstant) {
+    const creepSpecificBodyPartCount = creep.body.filter(creepBodyPart => creepBodyPart.type === bodyPart).length;
+    const creepSpecificBoostedBodyPartCount = creep.body.filter(
+      creepBodyPart => creepBodyPart.type === bodyPart && creepBodyPart.boost === mineral
+    ).length;
+
+    if (creepSpecificBodyPartCount !== creepSpecificBoostedBodyPartCount) {
+      const mineralString = mineral.toString().toUpperCase();
+      const labsWithMineral = Object.entries(creep.room.memory.monitoring.structures.labs).filter(
+        ([, labMonitorMemory]) => labMonitorMemory.resources[mineralString]
+      );
+      if (labsWithMineral.length > 0) {
+        const labId = labsWithMineral[0][0] as Id<StructureLab>;
+        const lab = Game.getObjectById(labId);
+        if (lab) {
+          if (lab.store[RESOURCE_ENERGY] > LAB_ENERGY_CAPACITY / 10) {
+            creep.memory.status = "fetchingBoosts";
+            const boostResult = lab.boostCreep(creep);
+            if (boostResult === ERR_NOT_IN_RANGE) {
+              this.moveCreep(creep, lab.pos);
+            } else {
+              if (boostResult !== OK) {
+                Log.Warning(
+                  `${creep.name} in ${creep.room.name} has encountered a ${boostResult} error code while trying to boost bodyparts with the mineral ${mineral}`
+                );
+              } else {
+                creep.memory.status = "working";
+              }
+            }
+          }
+        }
+      }
+    } else {
+      creep.memory.status = "working";
     }
   }
   public moveHome(creep: Creep): void {
@@ -64,11 +100,7 @@ export class BaseCreep {
       return moveResult;
     } else return pickupResult;
   }
-  public withdrawResource(
-    creep: Creep,
-    origin: StructureStorage | StructureContainer | StructureLink,
-    resource: ResourceConstant
-  ): ScreepsReturnCode {
+  public withdrawResource(creep: Creep, origin: Structure, resource: ResourceConstant): ScreepsReturnCode {
     const withdrawResult = creep.withdraw(origin, resource);
     if (withdrawResult === ERR_NOT_IN_RANGE) {
       const moveResult = this.moveCreep(creep, origin.pos);

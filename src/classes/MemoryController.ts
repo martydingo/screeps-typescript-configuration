@@ -1,5 +1,5 @@
-import { QueueMemory } from "./Memory/QueueMemory";
-import { RoomMemory } from "./Memory/RoomMemory";
+import { QueueMemoryController } from "./MemoryController/QueueMemoryController";
+import { RoomMemoryController } from "./MemoryController/RoomMemoryController";
 import { roomOperations } from "common/roomOperations";
 
 export class MemoryController {
@@ -11,7 +11,7 @@ export class MemoryController {
     this.maintainRoomMemory();
   }
   private maintainQueueMemory() {
-    new QueueMemory();
+    new QueueMemoryController();
   }
   private maintainRoomMemory() {
     if (!Memory.rooms) {
@@ -19,7 +19,7 @@ export class MemoryController {
     }
     const roomsToAddToMemory = roomOperations.generateRoomsArray();
     roomsToAddToMemory.forEach(roomName => {
-      new RoomMemory(roomName);
+      new RoomMemoryController(roomName);
     });
   }
 }

@@ -14,13 +14,17 @@ declare global {
       | "scoutRoom"
       | "claimRoom"
       | "reserveRoom"
-      | "transportResource";
+      | "transportResource"
+      | "terminalEngineer"
+      | "labEngineer";
     sourceId?: Id<Source>;
     towerId?: Id<StructureTower>;
     controllerId?: Id<StructureController>;
     linkId?: Id<StructureLink>;
     room: string;
     resourceType?: ResourceConstant;
-    storage?: Id<StructureStorage>;
+    storage?: Id<StructureStorage> | Id<StructureContainer>;
+    terminalJobUUID?: string;
+    labJobUUID?: string;
   }
 }

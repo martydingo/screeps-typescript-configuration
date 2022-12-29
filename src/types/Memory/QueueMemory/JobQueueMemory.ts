@@ -15,7 +15,9 @@ declare global {
         | ScoutRoomJobParameters
         | ClaimRoomJobParameters
         | ReserveRoomJobParameters
-        | TransportResourceJobParameters;
+        | TransportResourceJobParameters
+        | TerminalEngineerJobParameters
+        | LabEngineerJobParameters;
       jobType: string;
       timeAdded: Game["time"];
       assignedCreep?: Id<Creep>;

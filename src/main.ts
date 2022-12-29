@@ -1,7 +1,6 @@
 import { GameMonitor } from "classes/Monitor/GameMonitor";
 import { Log } from "classes/Log";
 import { Operator } from "classes/Operator";
-import { Queue } from "classes/Queue";
 import { garbageCollect } from "common/utilities/garbageCollect";
 import { Monitor } from "classes/Monitor";
 import { MemoryController } from "classes/MemoryController";
@@ -13,7 +12,6 @@ export const loop = () => {
   garbageCollect.creeps();
   new MemoryController();
   new Monitor();
-  new Queue();
   new Operator();
   new GameMonitor();
   // resetQueues.resetAllQueues();

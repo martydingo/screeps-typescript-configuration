@@ -19,53 +19,6 @@ export class RoomMonitor {
       this.runChildMonitors();
     }
   }
-  private setupRoomMemory(): void {
-    if (!Memory.rooms) {
-      Memory.rooms = {};
-    }
-    if (!Memory.rooms[this.roomName]) {
-      Memory.rooms[this.roomName] = {
-        monitoring: {
-          constructionSites: {},
-          droppedResources: {},
-          energy: {
-            history: {}
-          },
-          hostiles: {},
-          sources: {},
-          structures: {
-            spawns: {},
-            extensions: {},
-            roads: {},
-            towers: {},
-            links: {},
-            other: {}
-          }
-        },
-        queues: {
-          spawnQueue: {}
-        }
-      };
-    } else if (!Memory.rooms[this.roomName].monitoring) {
-      Memory.rooms[this.roomName].monitoring = {
-        constructionSites: {},
-        droppedResources: {},
-        energy: {
-          history: {}
-        },
-        hostiles: {},
-        sources: {},
-        structures: {
-          spawns: {},
-          extensions: {},
-          roads: {},
-          towers: {},
-          links: {},
-          other: {}
-        }
-      };
-    }
-  }
   private runChildMonitors(): void {
     this.runStructureMonitor();
     this.runEnergyMonitors();

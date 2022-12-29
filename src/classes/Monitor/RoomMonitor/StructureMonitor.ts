@@ -1,9 +1,12 @@
+import { ContainerMonitor } from "./StructureMonitor/ContainerMonitor";
 import { ControllerMonitor } from "./StructureMonitor/ControllerMonitor";
 import { ExtensionMonitor } from "./StructureMonitor/ExtensionMonitor";
+import { LabMonitor } from "./StructureMonitor/LabMonitor";
 import { LinkMonitor } from "./StructureMonitor/LinkMonitor";
 import { RoadMonitor } from "./StructureMonitor/RoadMonitor";
 import { SpawnMonitor } from "./StructureMonitor/SpawnMonitor";
 import { StorageMonitor } from "./StructureMonitor/StorageMonitor";
+import { TerminalMonitor } from "./StructureMonitor/TerminalMonitor";
 import { TowerMonitor } from "./StructureMonitor/TowerMonitor";
 
 export class StructureMonitor {
@@ -29,9 +32,13 @@ export class StructureMonitor {
         } else if (Structure.structureType === STRUCTURE_STORAGE) {
           new StorageMonitor(Structure);
         } else if (Structure.structureType === STRUCTURE_CONTAINER) {
-          //
+          new ContainerMonitor(Structure);
         } else if (Structure.structureType === STRUCTURE_ROAD) {
           new RoadMonitor(Structure);
+        } else if (Structure.structureType === STRUCTURE_LAB) {
+          new LabMonitor(Structure);
+        } else if (Structure.structureType === STRUCTURE_TERMINAL) {
+          new TerminalMonitor(Structure);
         } else {
           this.room.memory.monitoring.structures.other[Structure.id] = {
             structureType: Structure.structureType

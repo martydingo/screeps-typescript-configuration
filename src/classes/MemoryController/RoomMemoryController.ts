@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-export class RoomMemory {
+export class RoomMemoryController {
   private roomMemorySchematic;
   private roomName;
   public constructor(roomName: string) {
@@ -19,11 +19,16 @@ export class RoomMemory {
           roads: {},
           towers: {},
           links: {},
+          containers: {},
+          labs: {},
+          walls: {},
           other: {}
         }
       },
       queues: {
-        spawnQueue: {}
+        spawnQueue: {},
+        terminalQueue: {},
+        labQueue: {}
       }
     };
     this.roomMemorySchematic = roomMemorySchematic;

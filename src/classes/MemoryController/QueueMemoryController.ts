@@ -1,4 +1,4 @@
-export class QueueMemory {
+export class QueueMemoryController {
   public constructor() {
     this.maintainQueueMemoryHealth();
   }
