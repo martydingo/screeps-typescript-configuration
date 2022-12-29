@@ -3,7 +3,6 @@
 import { FeedLinkJob } from "classes/Job/FeedLinkJob";
 import { Log } from "classes/Log";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
-import { linkConfig } from "configuration/rooms/links/linkConfig";
 
 export class LinkOperator {
   public constructor() {
