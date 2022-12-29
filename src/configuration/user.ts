@@ -1,1 +1,1 @@
-export const myScreepsUsername = "marty";
+export const myScreepsUsername = "Marty";
