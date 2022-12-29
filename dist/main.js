@@ -1530,6 +1530,20 @@ class LinkOperator {
                 Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
                     const linkId = linkIdString;
                     const link = Game.getObjectById(linkId);
+                    if (link) {
+                        if (!Memory.rooms[roomName].monitoring.structures.links[linkId].mode) {
+                            this.setLinkMode(link);
+                        }
+                        const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
+                        if (linkMode === "tx") {
+                            this.createLinkFeederJob(link);
+                            this.transmitEnergy(link);
+                        }
+                    }
+                });
+                Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
+                    const linkId = linkIdString;
+                    const link = Game.getObjectById(linkId);
                     const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
                     if (linkMode === "tx" && link) {
                         this.createLinkFeederJob(link);
