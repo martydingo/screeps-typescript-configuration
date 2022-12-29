@@ -1,5 +1,6 @@
 src-dev-ts-01-legacy
 .gitignore
+src/configuration
 legacy
 # yarn lock file
 /yarn.lock
