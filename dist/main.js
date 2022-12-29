@@ -3747,7 +3747,7 @@ class ScoutRoomJob {
 
 const roomsToClaim = [];
 
-const roomsToMine = [];
+const roomsToMine = ["W56N11"];
 
 const roomOperations = {
     generateRoomsArray(roomOperation) {
