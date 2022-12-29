@@ -198,9 +198,9 @@ class BuildConstructionSiteJob {
     }
 }
 
-const roomsToAvoid = [];
+const roomsToAvoid = [""];
 
-const myScreepsUsername = "Marty";
+const myScreepsUsername = "marty";
 
 const findPath = {
     findClearTerrain(roomName) {
@@ -1349,7 +1349,7 @@ class LabEngineerJob {
 
 const labConfiguration = {
     W8N3: {
-        boostLab: "63a983d1da758c0321639c43"
+        boostLab: "63a1e52f46d2f61382721fbf"
     }
 };
 
@@ -1497,9 +1497,9 @@ class FeedLinkJob {
 }
 
 const linkConfig = {
-    W8N3: {
-        "63ab0a6e26553d03dcda0a60": "tx",
-        "63ab0b731b113d034be84db0": "rx"
+    W56N12: {
+        "6397f1bd30238608dae79135": "tx",
+        "639864121a5e460386cf8d54": "rx"
     }
 };
 
@@ -3737,9 +3737,9 @@ class ScoutRoomJob {
     }
 }
 
-const roomsToClaim = [];
+const roomsToClaim = [""];
 
-const roomsToMine = ["W8N2"];
+const roomsToMine = [""];
 
 const roomOperations = {
     generateRoomsArray(roomOperation) {
