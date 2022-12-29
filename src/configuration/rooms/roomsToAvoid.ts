@@ -1,1 +1,1 @@
-export const roomsToAvoid: string[] = [""];
+export const roomsToAvoid: string[] = [];
