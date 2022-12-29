@@ -28,13 +28,21 @@ export class LinkOperator {
           if (link) {
             if (!Memory.rooms[roomName].monitoring.structures.links[linkId].mode) {
               this.setLinkMode(link);
-            } else {
-              const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
-              if (linkMode === "tx") {
-                this.createLinkFeederJob(link);
-                this.transmitEnergy(link);
-              }
             }
+            const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
+            if (linkMode === "tx") {
+              this.createLinkFeederJob(link);
+              this.transmitEnergy(link);
+            }
+          }
+        });
+        Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
+          const linkId = linkIdString as Id<StructureLink>;
+          const link = Game.getObjectById(linkId);
+          const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
+          if (linkMode === "tx" && link) {
+            this.createLinkFeederJob(link);
+            this.transmitEnergy(link);
           }
         });
       }

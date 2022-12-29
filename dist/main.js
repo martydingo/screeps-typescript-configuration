@@ -1499,7 +1499,7 @@ class FeedLinkJob {
 const linkConfig = {
     W56N12: {
         "6397f1bd30238608dae79135": "tx",
-        "639864121a5e460386cf8d54": "rx",
+        "639b23129ab55f8634547d74": "rx",
         "63a3c1f82064b45cf37c59d8": "rx"
     }
 };
@@ -1529,13 +1529,20 @@ class LinkOperator {
                         if (!Memory.rooms[roomName].monitoring.structures.links[linkId].mode) {
                             this.setLinkMode(link);
                         }
-                        else {
-                            const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
-                            if (linkMode === "tx") {
-                                this.createLinkFeederJob(link);
-                                this.transmitEnergy(link);
-                            }
+                        const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
+                        if (linkMode === "tx") {
+                            this.createLinkFeederJob(link);
+                            this.transmitEnergy(link);
                         }
+                    }
+                });
+                Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
+                    const linkId = linkIdString;
+                    const link = Game.getObjectById(linkId);
+                    const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
+                    if (linkMode === "tx" && link) {
+                        this.createLinkFeederJob(link);
+                        this.transmitEnergy(link);
                     }
                 });
             }
