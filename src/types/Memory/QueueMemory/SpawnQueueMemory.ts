@@ -18,7 +18,8 @@ declare global {
         | LootResourceJobParameters
         | ScoutRoomJobParameters
         | ClaimRoomJobParameters
-        | ReserveRoomJobParameters;
+        | ReserveRoomJobParameters
+        | TransportResourceJobParameters;
     };
   }
 }

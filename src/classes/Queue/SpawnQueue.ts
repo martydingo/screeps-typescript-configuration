@@ -3,8 +3,8 @@ export class SpawnQueue {
     this.initalizeSpawnQueueMemory();
   }
   private initalizeSpawnQueueMemory() {
-    if (!Memory.queues.spawn) {
-      Memory.queues.spawn = {};
+    if (!Memory.queues.spawnQueue) {
+      Memory.queues.spawnQueue = {};
     }
   }
 }

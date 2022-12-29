@@ -7,6 +7,7 @@ import { LootResourceCreep } from "classes/Creep/LootResourceCreep";
 import { ReserveRoomCreep } from "classes/Creep/ReserveRoomCreep";
 import { ScoutRoomCreep } from "classes/Creep/ScoutRoomCreep";
 import { SourceMinerCreep } from "classes/Creep/SourceMinerCreep";
+import { TransportResourceCreep } from "classes/Creep/TransportResourceCreep";
 import { UpgradeControllerCreep } from "classes/Creep/UpgradeControllerCreep";
 
 export class CreepOperator {
@@ -19,6 +20,7 @@ export class CreepOperator {
     this.runFeedTowerCreeps();
     this.runUpgradeControllerCreeps();
     this.runLootResourceCreeps();
+    this.runTransportResourceCreeps();
     this.runScoutRoomCreeps();
     this.runReserveRoomCreeps();
     this.runClaimRoomCreeps();
@@ -72,6 +74,13 @@ export class CreepOperator {
       .filter(([, Creep]) => Creep.memory.jobType === "lootResource")
       .forEach(([, creep]) => {
         new LootResourceCreep(creep);
+      });
+  }
+  private runTransportResourceCreeps() {
+    Object.entries(Game.creeps)
+      .filter(([, Creep]) => Creep.memory.jobType === "transportResource")
+      .forEach(([, creep]) => {
+        new TransportResourceCreep(creep);
       });
   }
   private runScoutRoomCreeps() {

@@ -5,7 +5,7 @@ export class BuildConstructionSiteJob {
   public JobParameters: BuildConstructionSiteJobParameters;
   public constructor(JobParameters: BuildConstructionSiteJobParameters, count = 1) {
     this.JobParameters = JobParameters;
-    Object.entries(Memory.queues.jobs)
+    Object.entries(Memory.queues.jobQueue)
       .filter(
         ([, jobMemory]) =>
           jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
@@ -29,11 +29,11 @@ export class BuildConstructionSiteJob {
     }
   }
   private createJob(UUID: string, index: number) {
-    if (!Memory.queues.jobs[UUID]) {
+    if (!Memory.queues.jobQueue[UUID]) {
       Log.Informational(
         `Creating "BuildConstructionSiteJob" for room: "${this.JobParameters.room}" with the UUID "${UUID}"`
       );
-      Memory.queues.jobs[UUID] = {
+      Memory.queues.jobQueue[UUID] = {
         jobParameters: {
           uuid: UUID,
           status: "fetchingResource",
@@ -49,11 +49,11 @@ export class BuildConstructionSiteJob {
     }
   }
   private deleteJob(UUID: string) {
-    if (Memory.queues.jobs[UUID]) {
+    if (Memory.queues.jobQueue[UUID]) {
       Log.Informational(
         `Deleting "BuildConstructionSiteJob" for room: "${this.JobParameters.room}" with the UUID "${UUID}"`
       );
-      delete Memory.queues.jobs[UUID];
+      delete Memory.queues.jobQueue[UUID];
     }
   }
 }

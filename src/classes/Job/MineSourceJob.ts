@@ -5,7 +5,7 @@ export class MineSourceJob {
   public JobParameters: MineSourceJobParameters;
   public constructor(JobParameters: MineSourceJobParameters, count = 1) {
     this.JobParameters = JobParameters;
-    Object.entries(Memory.queues.jobs)
+    Object.entries(Memory.queues.jobQueue)
       .filter(
         ([, jobMemory]) =>
           jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
@@ -29,11 +29,11 @@ export class MineSourceJob {
     }
   }
   private createJob(UUID: string, index: number) {
-    if (!Memory.queues.jobs[UUID]) {
+    if (!Memory.queues.jobQueue[UUID]) {
       Log.Informational(
         `Creating "MineSourceJob" for Source ID: "${this.JobParameters.sourceId}" with the UUID "${UUID}"`
       );
-      Memory.queues.jobs[UUID] = {
+      Memory.queues.jobQueue[UUID] = {
         jobParameters: {
           uuid: UUID,
           status: "fetchingResource",
@@ -50,11 +50,11 @@ export class MineSourceJob {
     }
   }
   private deleteJob(UUID: string) {
-    if (!Memory.queues.jobs[UUID]) {
+    if (!Memory.queues.jobQueue[UUID]) {
       Log.Informational(
         `Deleting  "MineSourceJob" for Source ID: "${this.JobParameters.sourceId}" with the UUID "${UUID}"`
       );
-      delete Memory.queues.jobs[UUID];
+      delete Memory.queues.jobQueue[UUID];
     }
   }
 }

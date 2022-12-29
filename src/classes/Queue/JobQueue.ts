@@ -3,8 +3,8 @@ export class JobQueue {
     this.initalizeJobQueueMemory();
   }
   private initalizeJobQueueMemory(): void {
-    if (!Memory.queues.jobs) {
-      Memory.queues.jobs = {};
+    if (!Memory.queues.jobQueue) {
+      Memory.queues.jobQueue = {};
     }
   }
 }

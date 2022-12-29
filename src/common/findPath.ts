@@ -28,8 +28,27 @@ export const findPath = {
       ([spawnNameA], [spawnNameB]) => spawnDistanceMatrix[spawnNameB] - spawnDistanceMatrix[spawnNameA]
     );
     const spawnName = Object.entries(spawnDistanceMatrix)[0][0];
-
     return Game.spawns[spawnName];
+  },
+  findClosestStorageToRoom(originRoomName: string) {
+    const storageDistanceMatrix: { [key: string]: number } = {};
+    Object.entries(Game.rooms).forEach(([roomName, room]) => {
+      if (room.storage) {
+        let cost = 0;
+        Game.map.findRoute(originRoomName, roomName, {
+          routeCallback(): void {
+            cost = cost + 1;
+          }
+        });
+        storageDistanceMatrix[roomName] = cost;
+      }
+    });
+    Object.entries(storageDistanceMatrix).sort(
+      ([storageRoomA], [storageRoomB]) => storageDistanceMatrix[storageRoomA] - storageDistanceMatrix[storageRoomB]
+    );
+    const storageRoom = Object.entries(storageDistanceMatrix)[0][0];
+
+    return Game.rooms[storageRoom].storage;
   },
   findSafePathToRoom(originRoomName: string, destinationRoomName: string) {
     const safeRoute = Game.map.findRoute(originRoomName, destinationRoomName, {

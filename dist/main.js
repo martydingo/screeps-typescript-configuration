@@ -151,7 +151,7 @@ base64.ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/
 class BuildConstructionSiteJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobs)
+        Object.entries(Memory.queues.jobQueue)
             .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
             jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
@@ -173,9 +173,9 @@ class BuildConstructionSiteJob {
         }
     }
     createJob(UUID, index) {
-        if (!Memory.queues.jobs[UUID]) {
+        if (!Memory.queues.jobQueue[UUID]) {
             Log.Informational(`Creating "BuildConstructionSiteJob" for room: "${this.JobParameters.room}" with the UUID "${UUID}"`);
-            Memory.queues.jobs[UUID] = {
+            Memory.queues.jobQueue[UUID] = {
                 jobParameters: {
                     uuid: UUID,
                     status: "fetchingResource",
@@ -191,16 +191,16 @@ class BuildConstructionSiteJob {
         }
     }
     deleteJob(UUID) {
-        if (Memory.queues.jobs[UUID]) {
+        if (Memory.queues.jobQueue[UUID]) {
             Log.Informational(`Deleting "BuildConstructionSiteJob" for room: "${this.JobParameters.room}" with the UUID "${UUID}"`);
-            delete Memory.queues.jobs[UUID];
+            delete Memory.queues.jobQueue[UUID];
         }
     }
 }
 
-const roomsToAvoid = [""];
+const roomsToAvoid = [];
 
-const myScreepsUsername = "marty";
+const myScreepsUsername = "Marty";
 
 const findPath = {
     findClearTerrain(roomName) {
@@ -228,6 +228,23 @@ const findPath = {
         Object.entries(spawnDistanceMatrix).sort(([spawnNameA], [spawnNameB]) => spawnDistanceMatrix[spawnNameB] - spawnDistanceMatrix[spawnNameA]);
         const spawnName = Object.entries(spawnDistanceMatrix)[0][0];
         return Game.spawns[spawnName];
+    },
+    findClosestStorageToRoom(originRoomName) {
+        const storageDistanceMatrix = {};
+        Object.entries(Game.rooms).forEach(([roomName, room]) => {
+            if (room.storage) {
+                let cost = 0;
+                Game.map.findRoute(originRoomName, roomName, {
+                    routeCallback() {
+                        cost = cost + 1;
+                    }
+                });
+                storageDistanceMatrix[roomName] = cost;
+            }
+        });
+        Object.entries(storageDistanceMatrix).sort(([storageRoomA], [storageRoomB]) => storageDistanceMatrix[storageRoomA] - storageDistanceMatrix[storageRoomB]);
+        const storageRoom = Object.entries(storageDistanceMatrix)[0][0];
+        return Game.rooms[storageRoom].storage;
     },
     findSafePathToRoom(originRoomName, destinationRoomName) {
         const safeRoute = Game.map.findRoute(originRoomName, destinationRoomName, {
@@ -338,7 +355,7 @@ class ConstructionSiteOperator {
 class UpgradeControllerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobs)
+        Object.entries(Memory.queues.jobQueue)
             .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
@@ -359,9 +376,9 @@ class UpgradeControllerJob {
         }
     }
     createJob(UUID, index) {
-        if (!Memory.queues.jobs[UUID]) {
+        if (!Memory.queues.jobQueue[UUID]) {
             Log.Informational(`Creating "UpgradeControllerJob" for Controller ID: "${this.JobParameters.controllerId}" with the UUID "${UUID}"`);
-            Memory.queues.jobs[UUID] = {
+            Memory.queues.jobQueue[UUID] = {
                 jobParameters: {
                     uuid: UUID,
                     status: "fetchingResource",
@@ -378,9 +395,9 @@ class UpgradeControllerJob {
         }
     }
     deleteJob(UUID) {
-        if (Memory.queues.jobs[UUID]) {
+        if (Memory.queues.jobQueue[UUID]) {
             Log.Informational(`Deleting "UpgradeControllerJob" for Controller ID: "${this.JobParameters.controllerId}" with the UUID "${UUID}"`);
-            delete Memory.queues.jobs[UUID];
+            delete Memory.queues.jobQueue[UUID];
         }
     }
 }
@@ -813,7 +830,7 @@ class LootResourceCreep extends BaseCreep {
 class ReserveRoomCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
-        // this.runCreep(creep);
+        this.runCreep(creep);
     }
     runCreep(creep) {
         var _a;
@@ -904,6 +921,49 @@ class SourceMinerCreep extends BaseCreep {
     }
 }
 
+class TransportResourceCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.checkIfFull(creep, RESOURCE_ENERGY);
+        if (creep.memory.status === "fetchingResource") {
+            if (creep.pos.roomName !== creep.memory.room) {
+                this.moveHome(creep);
+                creep.memory.status = "fetchingResource";
+            }
+            else {
+                const resourceArray = [];
+                Object.entries(creep.room.memory.monitoring.droppedResources)
+                    .filter(([, resourceMemory]) => resourceMemory.resourceType === creep.memory.resourceType)
+                    .forEach(([resourceIdString]) => {
+                    const resourceId = resourceIdString;
+                    const resource = Game.getObjectById(resourceId);
+                    if (resource) {
+                        resourceArray.push(resource);
+                    }
+                });
+                const nearestResource = creep.pos.findClosestByPath(resourceArray);
+                if (nearestResource) {
+                    this.pickupResource(creep, nearestResource);
+                }
+            }
+        }
+        else if (creep.memory.status === "working") {
+            if (creep.memory.storage) {
+                const storage = Game.getObjectById(creep.memory.storage);
+                if (storage) {
+                    Object.entries(creep.store).forEach(([resourceConstantString]) => {
+                        const resourceConstant = resourceConstantString;
+                        this.depositResource(creep, storage, resourceConstant);
+                    });
+                }
+            }
+        }
+    }
+}
+
 class UpgradeControllerCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
@@ -948,6 +1008,7 @@ class CreepOperator {
         this.runFeedTowerCreeps();
         this.runUpgradeControllerCreeps();
         this.runLootResourceCreeps();
+        this.runTransportResourceCreeps();
         this.runScoutRoomCreeps();
         this.runReserveRoomCreeps();
         this.runClaimRoomCreeps();
@@ -1003,6 +1064,13 @@ class CreepOperator {
             new LootResourceCreep(creep);
         });
     }
+    runTransportResourceCreeps() {
+        Object.entries(Game.creeps)
+            .filter(([, Creep]) => Creep.memory.jobType === "transportResource")
+            .forEach(([, creep]) => {
+            new TransportResourceCreep(creep);
+        });
+    }
     runScoutRoomCreeps() {
         Object.entries(Game.creeps)
             .filter(([, Creep]) => Creep.memory.jobType === "scoutRoom")
@@ -1042,7 +1110,7 @@ class GameOperator {
 class FeedLinkJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobs)
+        Object.entries(Memory.queues.jobQueue)
             .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
@@ -1063,9 +1131,9 @@ class FeedLinkJob {
         }
     }
     createJob(UUID, index) {
-        if (!Memory.queues.jobs[UUID]) {
+        if (!Memory.queues.jobQueue[UUID]) {
             Log.Informational(`Creating "FeedLinkJob" for Link ID "${this.JobParameters.linkId} with the UUID of ${UUID}"`);
-            Memory.queues.jobs[UUID] = {
+            Memory.queues.jobQueue[UUID] = {
                 jobParameters: {
                     uuid: UUID,
                     status: "fetchingResource",
@@ -1081,9 +1149,9 @@ class FeedLinkJob {
         }
     }
     deleteJob(UUID) {
-        if (Memory.queues.jobs[UUID]) {
+        if (Memory.queues.jobQueue[UUID]) {
             Log.Informational(`Deleting "FeedLinkJob" for Link ID "${this.JobParameters.linkId} with the UUID of ${UUID}"`);
-            delete Memory.queues.jobs[UUID];
+            delete Memory.queues.jobQueue[UUID];
         }
     }
 }
@@ -1381,7 +1449,7 @@ const creepBodyParts = {
         ],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
+        reserveRoom: [MOVE, MOVE, CLAIM, CLAIM]
     },
     5: {
         // Second level is the jobType.
@@ -1569,7 +1637,7 @@ const creepBodyParts = {
         ],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
     },
     6: {
         // Second level is the jobType.
@@ -1801,7 +1869,7 @@ const creepBodyParts = {
         ],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
     },
     7: {
         // Second level is the jobType.
@@ -2071,7 +2139,7 @@ const creepBodyParts = {
         ],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
     },
     8: {
         // Second level is the jobType.
@@ -2341,7 +2409,7 @@ const creepBodyParts = {
         ],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
     }
 };
 
@@ -2553,48 +2621,48 @@ class JobQueueOperator {
         this.processJobs();
     }
     processJobs() {
-        for (const jobUUID in Memory.queues.jobs) {
-            let spawnRoom = Memory.queues.jobs[jobUUID].jobParameters.room;
-            if (Memory.queues.jobs[jobUUID].jobParameters.spawnRoom) {
-                const spawnRoomString = Memory.queues.jobs[jobUUID].jobParameters.spawnRoom;
+        for (const jobUUID in Memory.queues.jobQueue) {
+            let spawnRoom = Memory.queues.jobQueue[jobUUID].jobParameters.room;
+            if (Memory.queues.jobQueue[jobUUID].jobParameters.spawnRoom) {
+                const spawnRoomString = Memory.queues.jobQueue[jobUUID].jobParameters.spawnRoom;
                 if (spawnRoomString) {
                     spawnRoom = spawnRoomString;
                 }
             }
-            const desiredBodyParts = fetchBodyParts(Memory.queues.jobs[jobUUID].jobType, spawnRoom);
-            // console.log(`${Memory.queues.jobs[jobUUID].jobType}: ${desiredBodyParts.toString()}`);
-            if (!Memory.queues.spawn[jobUUID]) {
+            const desiredBodyParts = fetchBodyParts(Memory.queues.jobQueue[jobUUID].jobType, spawnRoom);
+            // console.log(`${Memory.queues.jobQueue[jobUUID].jobType}: ${desiredBodyParts.toString()}`);
+            if (!Memory.queues.spawnQueue[jobUUID]) {
                 if (!this.checkCreep(jobUUID)) {
-                    Memory.queues.spawn[jobUUID] = {
+                    Memory.queues.spawnQueue[jobUUID] = {
                         name: jobUUID,
                         uuid: jobUUID,
-                        creepType: Memory.queues.jobs[jobUUID].jobType,
+                        creepType: Memory.queues.jobQueue[jobUUID].jobType,
                         bodyParts: desiredBodyParts,
-                        room: Memory.queues.jobs[jobUUID].jobParameters.room,
-                        spawnRoom: Memory.queues.jobs[jobUUID].jobParameters.spawnRoom,
-                        jobParameters: Memory.queues.jobs[jobUUID].jobParameters
+                        room: Memory.queues.jobQueue[jobUUID].jobParameters.room,
+                        spawnRoom: Memory.queues.jobQueue[jobUUID].jobParameters.spawnRoom,
+                        jobParameters: Memory.queues.jobQueue[jobUUID].jobParameters
                     };
                 }
                 else {
                     if (this.checkCreep(jobUUID)) {
-                        delete Memory.queues.spawn[jobUUID];
-                        delete Memory.rooms[spawnRoom].monitoring.spawnQueue[jobUUID];
+                        delete Memory.queues.spawnQueue[jobUUID];
+                        delete Memory.rooms[spawnRoom].queues.spawnQueue[jobUUID];
                     }
                     else {
-                        if (Memory.queues.spawn[jobUUID].bodyParts !== desiredBodyParts) {
-                            Memory.queues.spawn[jobUUID].bodyParts = desiredBodyParts;
+                        if (Memory.queues.spawnQueue[jobUUID].bodyParts !== desiredBodyParts) {
+                            Memory.queues.spawnQueue[jobUUID].bodyParts = desiredBodyParts;
                         }
                     }
                 }
             }
             else {
                 if (this.checkCreep(jobUUID)) {
-                    delete Memory.queues.spawn[jobUUID];
-                    delete Memory.rooms[spawnRoom].monitoring.spawnQueue[jobUUID];
+                    delete Memory.queues.spawnQueue[jobUUID];
+                    delete Memory.rooms[spawnRoom].queues.spawnQueue[jobUUID];
                 }
                 else {
-                    if (Memory.queues.spawn[jobUUID].bodyParts !== desiredBodyParts) {
-                        Memory.queues.spawn[jobUUID].bodyParts = desiredBodyParts;
+                    if (Memory.queues.spawnQueue[jobUUID].bodyParts !== desiredBodyParts) {
+                        Memory.queues.spawnQueue[jobUUID].bodyParts = desiredBodyParts;
                     }
                 }
             }
@@ -2610,9 +2678,86 @@ class JobQueueOperator {
     }
 }
 
+function creepPriority(room) {
+    let priority = {
+        mineSource: 1,
+        feedSpawn: 2,
+        transportResource: 3,
+        feedTower: 4,
+        upgradeController: 5,
+        scoutRoom: 6,
+        workTerminal: 7,
+        lootResource: 8,
+        feedLink: 9,
+        reserveRoom: 10,
+        claimRoom: 11,
+        buildConstructionSite: 12
+    };
+    if (room) {
+        let storageContainsEnergy = false;
+        let roomContainsDroppedEnergy = false;
+        let feederCreepAlive = false;
+        if (room.memory.monitoring.structures.storage) {
+            if (room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY]) {
+                if (room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY].resourceAmount >= 300) {
+                    storageContainsEnergy = true;
+                }
+            }
+        }
+        if (Object.entries(room.memory.monitoring.droppedResources).length > 0) {
+            roomContainsDroppedEnergy = true;
+        }
+        if (Object.entries(Memory.creeps).filter(([, creepMemory]) => creepMemory.jobType === "feedSpawn").length > 0) {
+            feederCreepAlive = true;
+        }
+        if (roomContainsDroppedEnergy || storageContainsEnergy || feederCreepAlive) {
+            priority = {
+                feedSpawn: priority.mineSource,
+                mineSource: priority.feedSpawn,
+                transportResource: priority.transportResource,
+                feedTower: priority.feedTower,
+                upgradeController: priority.upgradeController,
+                scoutRoom: priority.scoutRoom,
+                reserveRoom: priority.reserveRoom,
+                claimRoom: priority.claimRoom,
+                buildConstructionSite: priority.buildConstructionSite,
+                feedLink: priority.feedLink,
+                workTerminal: priority.workTerminal,
+                lootResource: priority.lootResource
+            };
+        }
+    }
+    return priority;
+}
+
+class SpawnQueueOperator {
+    constructor() {
+        this.generateRoomSpawnQueues();
+    }
+    generateRoomSpawnQueues() {
+        const sortedSpawnQueue = Object.entries(Memory.queues.spawnQueue).sort(([, spawnJobA], [, spawnJobB]) => {
+            return (creepPriority(Game.rooms[spawnJobA.room])[spawnJobA.creepType] -
+                creepPriority(Game.rooms[spawnJobB.room])[spawnJobB.creepType]);
+        });
+        if (sortedSpawnQueue.length > 0) {
+            Object.entries(sortedSpawnQueue).forEach(([, roomSpawnQueue]) => {
+                let roomSpawnQueueSpawnRoom = roomSpawnQueue[1].room;
+                if (roomSpawnQueue[1].spawnRoom) {
+                    roomSpawnQueueSpawnRoom = roomSpawnQueue[1].spawnRoom;
+                }
+                if (!Memory.rooms[roomSpawnQueueSpawnRoom].queues.spawnQueue) {
+                    Memory.rooms[roomSpawnQueueSpawnRoom].queues.spawnQueue = {};
+                }
+                Memory.rooms[roomSpawnQueueSpawnRoom].queues.spawnQueue[roomSpawnQueue[0]] = roomSpawnQueue[1];
+            });
+        }
+    }
+}
+
 class QueueOperator {
     constructor() {
         this.runQueueOperators();
+        this.runSpawnQueueOperator();
     }
     runQueueOperators() {
         this.runJobQueueOperator();
@@ -2620,12 +2765,15 @@ class QueueOperator {
     runJobQueueOperator() {
         new JobQueueOperator();
     }
+    runSpawnQueueOperator() {
+        new SpawnQueueOperator();
+    }
 }
 
 class ClaimRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobs)
+        Object.entries(Memory.queues.jobQueue)
             .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
@@ -2646,9 +2794,9 @@ class ClaimRoomJob {
         }
     }
     createJob(UUID, index) {
-        if (!Memory.queues.jobs[UUID]) {
+        if (!Memory.queues.jobQueue[UUID]) {
             Log.Informational(`Creating "ClaimRoomJob" for Room ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
-            Memory.queues.jobs[UUID] = {
+            Memory.queues.jobQueue[UUID] = {
                 jobParameters: {
                     uuid: UUID,
                     status: this.JobParameters.status,
@@ -2664,12 +2812,720 @@ class ClaimRoomJob {
         }
     }
     deleteJob(UUID) {
-        if (Memory.queues.jobs[UUID]) {
+        if (Memory.queues.jobQueue[UUID]) {
             Log.Informational(`Deleting "ClaimRoomJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
-            delete Memory.queues.jobs[UUID];
+            delete Memory.queues.jobQueue[UUID];
         }
     }
 }
+
+class ReserveRoomJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "ReserveRoomJob" for Room ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: this.JobParameters.status,
+                    room: this.JobParameters.room,
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    jobType: "reserveRoom"
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "reserveRoom",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "ReserveRoomJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+class ScoutRoomJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "ScoutRoomJob" for Room ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: this.JobParameters.status,
+                    room: this.JobParameters.room,
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    jobType: "scoutRoom"
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "scoutRoom",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "ScoutRoomJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+const roomsToClaim = [];
+
+const roomsToMine = ["W8N2"];
+
+const roomOperations = {
+    generateRoomsArray(roomOperation) {
+        let roomsArray = [];
+        if (roomOperation) {
+            if (roomOperation === "mine") {
+                roomsArray = roomsToMine;
+            }
+            else {
+                if (roomOperation === "claim") {
+                    roomsArray = roomsToClaim;
+                }
+            }
+        }
+        else {
+            roomsArray = roomsArray.concat(roomsToMine);
+            roomsArray = roomsArray.concat(roomsToClaim);
+            Object.entries(Game.rooms).forEach(([roomName]) => {
+                roomsArray.push(roomName);
+            });
+        }
+        return roomsArray;
+    }
+};
+
+class RoomOperator {
+    constructor() {
+        const roomsToOperate = roomOperations.generateRoomsArray();
+        //
+        roomsToOperate.forEach(roomName => {
+            var _a, _b;
+            // console.log(`${Game.time.toString()} - ${roomName}`);
+            const room = Game.rooms[roomName];
+            if (room) {
+                const roomController = room.controller;
+                if (roomController) {
+                    if (roomController.my) ;
+                    else {
+                        if (roomOperations.generateRoomsArray("claim").includes(roomName)) {
+                            this.createClaimRoomJob(roomName);
+                        }
+                        if (roomOperations.generateRoomsArray("mine").includes(roomName)) {
+                            if (!(((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.reservation) === null || _b === void 0 ? void 0 : _b.username) === myScreepsUsername)) {
+                                this.createReserveRoomJob(roomName);
+                            }
+                        }
+                    }
+                }
+            }
+            else {
+                this.createScoutRoomJob(roomName);
+            }
+        });
+    }
+    createScoutRoomJob(roomName) {
+        const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+        const jobParameters = {
+            jobType: "scoutRoom",
+            status: "movingIntoRoom",
+            room: roomName,
+            spawnRoom
+        };
+        new ScoutRoomJob(jobParameters);
+    }
+    createClaimRoomJob(roomName) {
+        const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+        const jobParameters = {
+            jobType: "claimRoom",
+            status: "movingIntoRoom",
+            room: roomName,
+            spawnRoom
+        };
+        new ClaimRoomJob(jobParameters);
+    }
+    createReserveRoomJob(roomName) {
+        const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+        const jobParameters = {
+            jobType: "reserveRoom",
+            status: "movingIntoRoom",
+            room: roomName,
+            spawnRoom
+        };
+        new ReserveRoomJob(jobParameters);
+    }
+}
+
+class MineSourceJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.sourceId === this.JobParameters.sourceId)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.sourceId}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.sourceId}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "MineSourceJob" for Source ID: "${this.JobParameters.sourceId}" with the UUID "${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: "fetchingResource",
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    room: this.JobParameters.room,
+                    jobType: "mineSource",
+                    sourceId: this.JobParameters.sourceId
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "mineSource",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting  "MineSourceJob" for Source ID: "${this.JobParameters.sourceId}" with the UUID "${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+class TransportResourceJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${this.JobParameters.resourceType}-${this.JobParameters.storage}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${this.JobParameters.resourceType}-${this.JobParameters.storage}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "TransportResourceJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: "fetchingResource",
+                    room: this.JobParameters.room,
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    jobType: "transportResource",
+                    resourceType: this.JobParameters.resourceType,
+                    storage: this.JobParameters.storage
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "transportResource",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "LootResourceJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+class SourceOperator {
+    constructor() {
+        this.operateSources();
+    }
+    operateSources() {
+        var _a, _b, _c, _d;
+        if (Memory.rooms) {
+            for (const roomName in Memory.rooms) {
+                for (const sourceIdString in Memory.rooms[roomName].monitoring.sources) {
+                    const sourceId = sourceIdString;
+                    const source = Game.getObjectById(sourceId);
+                    if (source) {
+                        if (((_a = source.room.controller) === null || _a === void 0 ? void 0 : _a.my) || ((_c = (_b = source.room.controller) === null || _b === void 0 ? void 0 : _b.reservation) === null || _c === void 0 ? void 0 : _c.username) === myScreepsUsername) {
+                            this.createSourceMinerJob(source);
+                            if (!((_d = source.room.controller) === null || _d === void 0 ? void 0 : _d.my)) {
+                                this.createTransportEnergyJob(source);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    createSourceMinerJob(source) {
+        let spawnRoom = source.pos.roomName;
+        if (Object.entries(source.room.memory.monitoring.structures.spawns).length === 0) {
+            spawnRoom = findPath.findClosestSpawnToRoom(source.pos.roomName).pos.roomName;
+        }
+        const JobParameters = {
+            status: "fetchingResource",
+            spawnRoom,
+            room: source.pos.roomName,
+            jobType: "mineSource",
+            sourceId: source.id
+        };
+        const count = creepNumbers[JobParameters.jobType];
+        new MineSourceJob(JobParameters, count);
+    }
+    createTransportEnergyJob(source) {
+        const storage = findPath.findClosestStorageToRoom(source.pos.roomName);
+        if (storage) {
+            const JobParameters = {
+                status: "fetchingResource",
+                spawnRoom: findPath.findClosestSpawnToRoom(source.pos.roomName).pos.roomName,
+                room: source.pos.roomName,
+                jobType: "transportResource",
+                resourceType: RESOURCE_ENERGY,
+                storage: storage.id
+            };
+            const count = creepNumbers[JobParameters.jobType];
+            new TransportResourceJob(JobParameters, count);
+        }
+        else {
+            Log.Alert(`TransportResource Job for source ${source.id} cannot find any storage nearby ${source.pos.roomName}!`);
+        }
+    }
+}
+
+class FeedSpawnJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "FeedSpawnJob" for Room "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: "fetchingResource",
+                    room: this.JobParameters.room,
+                    jobType: "feedSpawn"
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "feedSpawn",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "FeedSpawnJob" for Room "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+class SpawnOperator {
+    constructor() {
+        this.createSpawnFeederJobs();
+        Object.entries(Game.rooms).forEach(([roomName]) => {
+            this.operateSpawns(roomName);
+        });
+    }
+    operateSpawns(roomName) {
+        if (Memory.rooms[roomName].queues.spawnQueue) {
+            const sortedRoomSpawnQueue = Object.entries(Memory.rooms[roomName].queues.spawnQueue);
+            let spawn = null;
+            if (sortedRoomSpawnQueue.length > 0) {
+                const nextSpawnJob = sortedRoomSpawnQueue[0][1];
+                let spawnRoom = nextSpawnJob.room;
+                if (nextSpawnJob.jobParameters.spawnRoom) {
+                    const spawnRoomString = nextSpawnJob.spawnRoom;
+                    if (spawnRoomString) {
+                        spawnRoom = spawnRoomString;
+                    }
+                }
+                const spawnObjects = Object.entries(Game.spawns).filter(([, Spawn]) => Spawn.spawning === null && Spawn.pos.roomName === spawnRoom);
+                if (spawnObjects.length > 0) {
+                    spawn = spawnObjects[0][1];
+                }
+                if (spawn) {
+                    const spawnResult = spawn.spawnCreep(nextSpawnJob.bodyParts, nextSpawnJob.name, {
+                        memory: nextSpawnJob.jobParameters
+                    });
+                    Log.Debug(`Spawn result for ${nextSpawnJob.creepType} in room ${spawnRoom}: ${spawnResult}`);
+                    if (spawnResult === OK) {
+                        delete Memory.rooms[spawnRoom].queues.spawnQueue[nextSpawnJob.uuid];
+                        delete Memory.queues.spawnQueue[nextSpawnJob.uuid];
+                    }
+                }
+                else {
+                    const AllSpawnObjects = Object.entries(Game.spawns).filter(([, Spawn]) => Spawn.pos.roomName === spawnRoom);
+                    if (AllSpawnObjects.length < 1) {
+                        Log.Emergency("::: !!! ::: Spawn object is null! All spawning currently halted in an error state! ::: !!! :::");
+                        Log.Debug(`::: !!! :::  spawnRoom: ${spawnRoom} ::: !!! :::`);
+                        Log.Debug(`::: !!! :::  nextSpawnJob Parameters: ${JSON.stringify(nextSpawnJob)} ::: !!! :::`);
+                    }
+                    else {
+                        Log.Warning(`While attempting to spawn a ${nextSpawnJob.jobParameters.jobType} creep, it was discovered that all spawners in ${spawnRoom} are spawning`);
+                    }
+                }
+            }
+        }
+        else {
+            Log.Emergency(`No spawn queue discovered in Memory.rooms[${roomName}].queues.spawnQueues`);
+        }
+    }
+    createSpawnFeederJobs() {
+        Object.entries(Game.spawns).forEach(([, spawn]) => {
+            const JobParameters = {
+                status: "fetchingResource",
+                room: spawn.pos.roomName,
+                jobType: "feedSpawn"
+            };
+            const count = creepNumbers[JobParameters.jobType];
+            new FeedSpawnJob(JobParameters, count);
+        });
+    }
+}
+
+class FeedTowerJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.towerId}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.towerId}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "FeedTowerJob" for Tower ID "${this.JobParameters.towerId} with the UUID of ${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: "fetchingResource",
+                    room: this.JobParameters.room,
+                    jobType: "feedTower",
+                    towerId: this.JobParameters.towerId
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "feedTower",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "FeedTowerJob" for Tower ID "${this.JobParameters.towerId} with the UUID of ${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+function fetchHostileCreep(room) {
+    const cachedHostiles = Object.entries(room.memory.monitoring.hostiles);
+    if (cachedHostiles.length === 1) {
+        const hostileIdUnknown = cachedHostiles[0][0];
+        const hostileId = hostileIdUnknown;
+        const hostile = Game.getObjectById(hostileId);
+        if (hostile) {
+            return hostile;
+        }
+    }
+    else {
+        if (cachedHostiles.length > 1) {
+            const cachedHostilesThatHeal = cachedHostiles.filter(([, cachedHostileMemory]) => cachedHostileMemory.bodyParts.includes(HEAL) === true);
+            if (cachedHostilesThatHeal.length === 1) {
+                const hostileIdUnknown = cachedHostilesThatHeal[0][0];
+                const hostileId = hostileIdUnknown;
+                const hostile = Game.getObjectById(hostileId);
+                if (hostile) {
+                    return hostile;
+                }
+            }
+            else {
+                if (cachedHostilesThatHeal.length > 1) {
+                    const cachedHostilesThatHealLowestHP = cachedHostiles.sort(([, cachedHostileMemoryA], [, cachedHostileMemoryB]) => cachedHostileMemoryA.health.hits - cachedHostileMemoryB.health.hits);
+                    const hostileIdUnknown = cachedHostilesThatHealLowestHP[0][0];
+                    const hostileId = hostileIdUnknown;
+                    const hostile = Game.getObjectById(hostileId);
+                    if (hostile) {
+                        return hostile;
+                    }
+                }
+            }
+        }
+    }
+    return undefined;
+}
+
+class TowerOperator {
+    constructor() {
+        if (Memory.rooms) {
+            Object.entries(Memory.rooms).forEach(([roomName]) => {
+                const towersInMemory = Memory.rooms[roomName].monitoring.structures.towers;
+                if (towersInMemory) {
+                    Object.entries(towersInMemory).forEach(([towerIdString]) => {
+                        const towerId = towerIdString;
+                        const tower = Game.getObjectById(towerId);
+                        if (tower) {
+                            this.createTowerFeederJob(tower);
+                            this.operateTowers(tower);
+                        }
+                    });
+                }
+            });
+        }
+    }
+    createTowerFeederJob(tower) {
+        const jobParameters = {
+            status: "fetchingResource",
+            room: tower.room.name,
+            jobType: "feedTower",
+            towerId: tower.id
+        };
+        new FeedTowerJob(jobParameters);
+    }
+    operateTowers(tower) {
+        if (!this.attackHostiles(tower)) {
+            this.repairRoads(tower);
+        }
+    }
+    attackHostiles(tower) {
+        const hostileCreep = fetchHostileCreep(tower.room);
+        if (hostileCreep) {
+            const attackResult = tower.attack(hostileCreep);
+            console.log(`Attack result on ${hostileCreep.name}: ${attackResult}`);
+            if (attackResult === OK) {
+                return true;
+            }
+        }
+        return false;
+    }
+    repairRoads(tower) {
+        const roadsInMemory = tower.room.memory.monitoring.structures.roads;
+        if (roadsInMemory) {
+            const roadToRepairObject = Object.entries(roadsInMemory).sort(
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            ([, cachedRoadA], [, cachedRoadB]) => cachedRoadA.structure.hits - cachedRoadB.structure.hits);
+            if (roadToRepairObject[0]) {
+                const roadToRepairId = roadToRepairObject[0][0];
+                const roadToRepair = Game.getObjectById(roadToRepairId);
+                if (roadToRepair) {
+                    tower.repair(roadToRepair);
+                }
+                else {
+                    delete Memory.rooms[tower.pos.roomName].monitoring.structures.roads[roadToRepairId];
+                }
+            }
+        }
+    }
+}
+
+class Operator {
+    constructor() {
+        this.runOperators();
+    }
+    runOperators() {
+        this.runRoomOperator();
+        this.runControllerOperator();
+        this.runSourceOperator();
+        this.runTowerOperator();
+        this.runCreepOperator();
+        this.runLinkOperator();
+        this.runConstructionSiteOperator();
+        this.runQueueOperator();
+        this.runSpawnOperator();
+        this.runGameOperator();
+    }
+    runControllerOperator() {
+        new ControllerOperator();
+    }
+    runSourceOperator() {
+        new SourceOperator();
+    }
+    runQueueOperator() {
+        new QueueOperator();
+    }
+    runSpawnOperator() {
+        new SpawnOperator();
+    }
+    runTowerOperator() {
+        new TowerOperator();
+    }
+    runCreepOperator() {
+        new CreepOperator();
+    }
+    runLinkOperator() {
+        new LinkOperator();
+    }
+    runConstructionSiteOperator() {
+        new ConstructionSiteOperator();
+    }
+    runRoomOperator() {
+        new RoomOperator();
+    }
+    runGameOperator() {
+        new GameOperator();
+    }
+}
+
+class JobQueue {
+    constructor() {
+        this.initalizeJobQueueMemory();
+    }
+    initalizeJobQueueMemory() {
+        if (!Memory.queues.jobQueue) {
+            Memory.queues.jobQueue = {};
+        }
+    }
+}
+
+class SpawnQueue {
+    constructor() {
+        this.initalizeSpawnQueueMemory();
+    }
+    initalizeSpawnQueueMemory() {
+        if (!Memory.queues.spawnQueue) {
+            Memory.queues.spawnQueue = {};
+        }
+    }
+}
+
+class Queue {
+    constructor() {
+        this.runQueues();
+    }
+    runQueues() {
+        this.runJobQueue();
+        this.runSpawnQueue();
+    }
+    runSpawnQueue() {
+        new SpawnQueue();
+    }
+    runJobQueue() {
+        new JobQueue();
+    }
+}
+
+const garbageCollect = {
+    creeps() {
+        for (const name in Memory.creeps) {
+            if (!(name in Game.creeps)) {
+                Log.Debug(`Clearing ${name} Creep Memory`);
+                delete Memory.creeps[name];
+            }
+        }
+    }
+};
 
 class ConstructionSiteMonitor {
     constructor(room) {
@@ -2696,7 +3552,7 @@ class ConstructionSiteMonitor {
 class LootResourceJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobs)
+        Object.entries(Memory.queues.jobQueue)
             .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
@@ -2717,9 +3573,9 @@ class LootResourceJob {
         }
     }
     createJob(UUID, index) {
-        if (!Memory.queues.jobs[UUID]) {
+        if (!Memory.queues.jobQueue[UUID]) {
             Log.Informational(`Creating "LootResourceJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
-            Memory.queues.jobs[UUID] = {
+            Memory.queues.jobQueue[UUID] = {
                 jobParameters: {
                     uuid: UUID,
                     status: "fetchingResource",
@@ -2734,9 +3590,9 @@ class LootResourceJob {
         }
     }
     deleteJob(UUID) {
-        if (Memory.queues.jobs[UUID]) {
+        if (Memory.queues.jobQueue[UUID]) {
             Log.Informational(`Deleting "LootResourceJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
-            delete Memory.queues.jobs[UUID];
+            delete Memory.queues.jobQueue[UUID];
         }
     }
 }
@@ -3116,8 +3972,6 @@ class RoomMonitor {
     constructor(RoomName) {
         this.roomName = RoomName;
         this.room = Game.rooms[RoomName];
-        // this.setupRoomMonitoringMemory();
-        this.setupRoomMemory();
         if (this.room) {
             this.runChildMonitors();
         }
@@ -3136,7 +3990,6 @@ class RoomMonitor {
                     },
                     hostiles: {},
                     sources: {},
-                    spawnQueue: {},
                     structures: {
                         spawns: {},
                         extensions: {},
@@ -3145,6 +3998,9 @@ class RoomMonitor {
                         links: {},
                         other: {}
                     }
+                },
+                queues: {
+                    spawnQueue: {}
                 }
             };
         }
@@ -3157,7 +4013,6 @@ class RoomMonitor {
                 },
                 hostiles: {},
                 sources: {},
-                spawnQueue: {},
                 structures: {
                     spawns: {},
                     extensions: {},
@@ -3201,706 +4056,154 @@ class RoomMonitor {
     }
 }
 
-class ScoutRoomJob {
-    constructor(JobParameters, count = 1) {
-        this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobs)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
-            .forEach(([jobUUID, jobMemory]) => {
-            if (jobMemory.index > count) {
-                this.deleteJob(jobUUID);
-            }
-        });
-        if (count === 1) {
-            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
-            this.createJob(UUID, 1);
-        }
-        else {
-            let iterations = 1;
-            while (iterations <= count) {
-                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
-                this.createJob(UUID, iterations);
-                iterations++;
-            }
-        }
-    }
-    createJob(UUID, index) {
-        if (!Memory.queues.jobs[UUID]) {
-            Log.Informational(`Creating "ScoutRoomJob" for Room ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
-            Memory.queues.jobs[UUID] = {
-                jobParameters: {
-                    uuid: UUID,
-                    status: this.JobParameters.status,
-                    room: this.JobParameters.room,
-                    spawnRoom: this.JobParameters.spawnRoom,
-                    jobType: "scoutRoom"
-                },
-                index,
-                room: this.JobParameters.room,
-                jobType: "scoutRoom",
-                timeAdded: Game.time
-            };
-        }
-    }
-    deleteJob(UUID) {
-        if (Memory.queues.jobs[UUID]) {
-            Log.Informational(`Deleting "ScoutRoomJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
-            delete Memory.queues.jobs[UUID];
-        }
-    }
-}
-
-const roomsToClaim = [];
-
-const roomsToMine = ["W8N2"];
-
-class ReserveRoomJob {
-    constructor(JobParameters, count = 1) {
-        this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobs)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
-            .forEach(([jobUUID, jobMemory]) => {
-            if (jobMemory.index > count) {
-                this.deleteJob(jobUUID);
-            }
-        });
-        if (count === 1) {
-            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
-            this.createJob(UUID, 1);
-        }
-        else {
-            let iterations = 1;
-            while (iterations <= count) {
-                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
-                this.createJob(UUID, iterations);
-                iterations++;
-            }
-        }
-    }
-    createJob(UUID, index) {
-        if (!Memory.queues.jobs[UUID]) {
-            Log.Informational(`Creating "ReserveRoomJob" for Room ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
-            Memory.queues.jobs[UUID] = {
-                jobParameters: {
-                    uuid: UUID,
-                    status: this.JobParameters.status,
-                    room: this.JobParameters.room,
-                    spawnRoom: this.JobParameters.spawnRoom,
-                    jobType: "reserveRoom"
-                },
-                index,
-                room: this.JobParameters.room,
-                jobType: "reserveRoom",
-                timeAdded: Game.time
-            };
-        }
-    }
-    deleteJob(UUID) {
-        if (Memory.queues.jobs[UUID]) {
-            Log.Informational(`Deleting "ReserveRoomJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
-            delete Memory.queues.jobs[UUID];
-        }
-    }
-}
-
-class RoomOperator {
+class Monitor {
     constructor() {
-        const roomsToOperate = [];
-        Object.entries(Game.rooms).forEach(([roomName]) => {
-            roomsToOperate.push(roomName);
+        this.monitorRooms();
+    }
+    monitorRooms() {
+        const roomsToMonitor = roomOperations.generateRoomsArray();
+        roomsToMonitor.forEach(roomName => {
+            new RoomMonitor(roomName);
         });
-        //
-        roomsToOperate.forEach(roomName => {
-            var _a, _b;
-            // console.log(`${Game.time.toString()} - ${roomName}`);
-            this.runRoomMonitor(roomName);
-            const room = Game.rooms[roomName];
-            if (room) {
-                const roomController = room.controller;
-                if (roomController) {
-                    if (roomController.my) ;
-                    else {
-                        if (roomsToClaim) {
-                            if (roomsToClaim.includes(roomName)) {
-                                this.createClaimRoomJob(roomName);
-                            }
-                        }
-                        if (roomsToMine) {
-                            if (roomsToMine.includes(roomName)) {
-                                if (!(((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.reservation) === null || _b === void 0 ? void 0 : _b.username) === myScreepsUsername)) {
-                                    this.createReserveRoomJob(roomName);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else {
-                this.createScoutRoomJob(roomName);
-            }
-        });
-    }
-    runRoomMonitor(roomName) {
-        new RoomMonitor(roomName);
-    }
-    createScoutRoomJob(roomName) {
-        const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
-        const jobParameters = {
-            jobType: "scoutRoom",
-            status: "movingIntoRoom",
-            room: roomName,
-            spawnRoom
-        };
-        new ScoutRoomJob(jobParameters);
-    }
-    createClaimRoomJob(roomName) {
-        const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
-        const jobParameters = {
-            jobType: "claimRoom",
-            status: "movingIntoRoom",
-            room: roomName,
-            spawnRoom
-        };
-        new ClaimRoomJob(jobParameters);
-    }
-    createReserveRoomJob(roomName) {
-        const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
-        const jobParameters = {
-            jobType: "reserveRoom",
-            status: "movingIntoRoom",
-            room: roomName,
-            spawnRoom
-        };
-        new ReserveRoomJob(jobParameters);
     }
 }
 
-class MineSourceJob {
-    constructor(JobParameters, count = 1) {
-        this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobs)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
-            jobMemory.jobParameters.sourceId === this.JobParameters.sourceId)
-            .forEach(([jobUUID, jobMemory]) => {
-            if (jobMemory.index > count) {
-                this.deleteJob(jobUUID);
-            }
-        });
-        if (count === 1) {
-            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.sourceId}-1`);
-            this.createJob(UUID, 1);
-        }
-        else {
-            let iterations = 1;
-            while (iterations <= count) {
-                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.sourceId}-${iterations}`);
-                this.createJob(UUID, iterations);
-                iterations++;
-            }
-        }
-    }
-    createJob(UUID, index) {
-        if (!Memory.queues.jobs[UUID]) {
-            Log.Informational(`Creating "MineSourceJob" for Source ID: "${this.JobParameters.sourceId}" with the UUID "${UUID}"`);
-            Memory.queues.jobs[UUID] = {
-                jobParameters: {
-                    uuid: UUID,
-                    status: "fetchingResource",
-                    spawnRoom: this.JobParameters.spawnRoom,
-                    room: this.JobParameters.room,
-                    jobType: "mineSource",
-                    sourceId: this.JobParameters.sourceId
-                },
-                index,
-                room: this.JobParameters.room,
-                jobType: "mineSource",
-                timeAdded: Game.time
-            };
-        }
-    }
-    deleteJob(UUID) {
-        if (!Memory.queues.jobs[UUID]) {
-            Log.Informational(`Deleting  "MineSourceJob" for Source ID: "${this.JobParameters.sourceId}" with the UUID "${UUID}"`);
-            delete Memory.queues.jobs[UUID];
-        }
-    }
-}
-
-class SourceOperator {
+class QueueMemory {
     constructor() {
-        this.operateSources();
+        this.maintainQueueMemoryHealth();
     }
-    operateSources() {
-        var _a, _b, _c;
-        if (Memory.rooms) {
-            for (const roomName in Memory.rooms) {
-                for (const sourceIdString in Memory.rooms[roomName].monitoring.sources) {
-                    const sourceId = sourceIdString;
-                    const source = Game.getObjectById(sourceId);
-                    if (source) {
-                        if (((_a = source.room.controller) === null || _a === void 0 ? void 0 : _a.my) || ((_c = (_b = source.room.controller) === null || _b === void 0 ? void 0 : _b.reservation) === null || _c === void 0 ? void 0 : _c.username) === myScreepsUsername) {
-                            let spawnRoom = source.pos.roomName;
-                            if (Object.entries(source.room.memory.monitoring.structures.spawns).length > 0) {
-                                spawnRoom = findPath.findClosestSpawnToRoom(source.pos.roomName).pos.roomName;
-                            }
-                            const JobParameters = {
-                                status: "fetchingResource",
-                                spawnRoom,
-                                room: source.pos.roomName,
-                                jobType: "mineSource",
-                                sourceId: source.id
-                            };
-                            const count = creepNumbers[JobParameters.jobType];
-                            new MineSourceJob(JobParameters, count);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-class FeedSpawnJob {
-    constructor(JobParameters, count = 1) {
-        this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobs)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
-            jobMemory.jobParameters.room === this.JobParameters.room)
-            .forEach(([jobUUID, jobMemory]) => {
-            if (jobMemory.index > count) {
-                this.deleteJob(jobUUID);
-            }
-        });
-        if (count === 1) {
-            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
-            this.createJob(UUID, 1);
-        }
-        else {
-            let iterations = 1;
-            while (iterations <= count) {
-                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
-                this.createJob(UUID, iterations);
-                iterations++;
-            }
-        }
-    }
-    createJob(UUID, index) {
-        if (!Memory.queues.jobs[UUID]) {
-            Log.Informational(`Creating "FeedSpawnJob" for Room "${this.JobParameters.room} with the UUID of ${UUID}"`);
-            Memory.queues.jobs[UUID] = {
-                jobParameters: {
-                    uuid: UUID,
-                    status: "fetchingResource",
-                    room: this.JobParameters.room,
-                    jobType: "feedSpawn"
-                },
-                index,
-                room: this.JobParameters.room,
-                jobType: "feedSpawn",
-                timeAdded: Game.time
-            };
-        }
-    }
-    deleteJob(UUID) {
-        if (Memory.queues.jobs[UUID]) {
-            Log.Informational(`Deleting "FeedSpawnJob" for Room "${this.JobParameters.room} with the UUID of ${UUID}"`);
-            delete Memory.queues.jobs[UUID];
-        }
-    }
-}
-
-function creepPriority(room) {
-    let priority = {
-        mineSource: 1,
-        feedSpawn: 2,
-        feedTower: 3,
-        upgradeController: 4,
-        scoutRoom: 5,
-        transportResource: 6,
-        workTerminal: 7,
-        lootResource: 8,
-        feedLink: 9,
-        reserveRoom: 10,
-        claimRoom: 11,
-        buildConstructionSite: 12
-    };
-    if (room) {
-        let storageContainsEnergy = false;
-        let roomContainsDroppedEnergy = false;
-        let feederCreepAlive = false;
-        if (room.memory.monitoring.structures.storage) {
-            if (room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY]) {
-                if (room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY].resourceAmount >= 300) {
-                    storageContainsEnergy = true;
-                }
-            }
-        }
-        if (Object.entries(room.memory.monitoring.droppedResources).length > 0) {
-            roomContainsDroppedEnergy = true;
-        }
-        if (Object.entries(Memory.creeps).filter(([, creepMemory]) => creepMemory.jobType === "feedSpawn").length > 0) {
-            feederCreepAlive = true;
-        }
-        if (roomContainsDroppedEnergy || storageContainsEnergy || feederCreepAlive) {
-            priority = {
-                feedSpawn: priority.mineSource,
-                mineSource: priority.feedSpawn,
-                feedTower: priority.feedTower,
-                upgradeController: priority.upgradeController,
-                scoutRoom: priority.scoutRoom,
-                reserveRoom: priority.reserveRoom,
-                claimRoom: priority.claimRoom,
-                buildConstructionSite: priority.buildConstructionSite,
-                feedLink: priority.feedLink,
-                workTerminal: priority.workTerminal,
-                lootResource: priority.lootResource,
-                transportResource: priority.transportResource
-            };
-        }
-    }
-    return priority;
-}
-
-class SpawnOperator {
-    constructor() {
-        this.createSpawnFeederJobs();
-        this.generateRoomSpawnQueues();
-        Object.entries(Game.rooms).forEach(([roomName]) => {
-            this.operateSpawns(roomName);
-        });
-    }
-    generateRoomSpawnQueues() {
-        const sortedSpawnQueue = Object.entries(Memory.queues.spawn).sort(([, spawnJobA], [, spawnJobB]) => {
-            return (creepPriority(Game.rooms[spawnJobA.room])[spawnJobA.creepType] -
-                creepPriority(Game.rooms[spawnJobB.room])[spawnJobB.creepType]);
-        });
-        if (sortedSpawnQueue.length > 0) {
-            Object.entries(sortedSpawnQueue).forEach(([, roomSpawnQueue]) => {
-                let roomSpawnQueueSpawnRoom = roomSpawnQueue[1].room;
-                if (roomSpawnQueue[1].spawnRoom) {
-                    roomSpawnQueueSpawnRoom = roomSpawnQueue[1].spawnRoom;
-                }
-                if (!Memory.rooms[roomSpawnQueueSpawnRoom].monitoring.spawnQueue) {
-                    Memory.rooms[roomSpawnQueueSpawnRoom].monitoring.spawnQueue = {};
-                }
-                Memory.rooms[roomSpawnQueueSpawnRoom].monitoring.spawnQueue[roomSpawnQueue[0]] = roomSpawnQueue[1];
-            });
-        }
-    }
-    operateSpawns(roomName) {
-        const sortedRoomSpawnQueue = Object.entries(Memory.rooms[roomName].monitoring.spawnQueue);
-        let spawn = null;
-        if (sortedRoomSpawnQueue.length > 0) {
-            const nextSpawnJob = sortedRoomSpawnQueue[0][1];
-            let spawnRoom = nextSpawnJob.room;
-            if (nextSpawnJob.jobParameters.spawnRoom) {
-                const spawnRoomString = nextSpawnJob.spawnRoom;
-                if (spawnRoomString) {
-                    spawnRoom = spawnRoomString;
-                }
-            }
-            const spawnObjects = Object.entries(Game.spawns).filter(([, Spawn]) => Spawn.spawning === null && Spawn.pos.roomName === spawnRoom);
-            if (spawnObjects.length > 0) {
-                spawn = spawnObjects[0][1];
-            }
-            if (spawn) {
-                const spawnResult = spawn.spawnCreep(nextSpawnJob.bodyParts, nextSpawnJob.name, {
-                    memory: nextSpawnJob.jobParameters
-                });
-                Log.Debug(`Spawn result for ${nextSpawnJob.creepType} in room ${spawnRoom}: ${spawnResult}`);
-                if (spawnResult === OK) {
-                    delete Memory.rooms[spawnRoom].monitoring.spawnQueue[nextSpawnJob.uuid];
-                    delete Memory.queues.spawn[nextSpawnJob.uuid];
-                }
-            }
-            else {
-                const AllSpawnObjects = Object.entries(Game.spawns).filter(([, Spawn]) => Spawn.pos.roomName === spawnRoom);
-                if (AllSpawnObjects.length < 1) {
-                    Log.Emergency("::: !!! ::: Spawn object is null! All spawning currently halted in an error state! ::: !!! :::");
-                    Log.Debug(`::: !!! :::  spawnRoom: ${spawnRoom} ::: !!! :::`);
-                    Log.Debug(`::: !!! :::  nextSpawnJob Parameters: ${JSON.stringify(nextSpawnJob)} ::: !!! :::`);
-                }
-                else {
-                    Log.Warning(`While attempting to spawn a ${nextSpawnJob.jobParameters.jobType} creep, it was discovered that all spawners in ${spawnRoom} are spawning`);
-                }
-            }
-        }
-    }
-    createSpawnFeederJobs() {
-        Object.entries(Game.spawns).forEach(([, spawn]) => {
-            const JobParameters = {
-                status: "fetchingResource",
-                room: spawn.pos.roomName,
-                jobType: "feedSpawn"
-            };
-            const count = creepNumbers[JobParameters.jobType];
-            new FeedSpawnJob(JobParameters, count);
-        });
-    }
-}
-
-class FeedTowerJob {
-    constructor(JobParameters, count = 1) {
-        this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobs)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
-            .forEach(([jobUUID, jobMemory]) => {
-            if (jobMemory.index > count) {
-                this.deleteJob(jobUUID);
-            }
-        });
-        if (count === 1) {
-            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.towerId}-1`);
-            this.createJob(UUID, 1);
-        }
-        else {
-            let iterations = 1;
-            while (iterations <= count) {
-                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.towerId}-${iterations}`);
-                this.createJob(UUID, iterations);
-                iterations++;
-            }
-        }
-    }
-    createJob(UUID, index) {
-        if (!Memory.queues.jobs[UUID]) {
-            Log.Informational(`Creating "FeedTowerJob" for Tower ID "${this.JobParameters.towerId} with the UUID of ${UUID}"`);
-            Memory.queues.jobs[UUID] = {
-                jobParameters: {
-                    uuid: UUID,
-                    status: "fetchingResource",
-                    room: this.JobParameters.room,
-                    jobType: "feedTower",
-                    towerId: this.JobParameters.towerId
-                },
-                index,
-                room: this.JobParameters.room,
-                jobType: "feedTower",
-                timeAdded: Game.time
-            };
-        }
-    }
-    deleteJob(UUID) {
-        if (Memory.queues.jobs[UUID]) {
-            Log.Informational(`Deleting "FeedTowerJob" for Tower ID "${this.JobParameters.towerId} with the UUID of ${UUID}"`);
-            delete Memory.queues.jobs[UUID];
-        }
-    }
-}
-
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-function fetchHostileCreep(room) {
-    const cachedHostiles = Object.entries(room.memory.monitoring.hostiles);
-    if (cachedHostiles.length === 1) {
-        const hostileIdUnknown = cachedHostiles[0][0];
-        const hostileId = hostileIdUnknown;
-        const hostile = Game.getObjectById(hostileId);
-        if (hostile) {
-            return hostile;
-        }
-    }
-    else {
-        if (cachedHostiles.length > 1) {
-            const cachedHostilesThatHeal = cachedHostiles.filter(([, cachedHostileMemory]) => cachedHostileMemory.bodyParts.includes(HEAL) === true);
-            if (cachedHostilesThatHeal.length === 1) {
-                const hostileIdUnknown = cachedHostilesThatHeal[0][0];
-                const hostileId = hostileIdUnknown;
-                const hostile = Game.getObjectById(hostileId);
-                if (hostile) {
-                    return hostile;
-                }
-            }
-            else {
-                if (cachedHostilesThatHeal.length > 1) {
-                    const cachedHostilesThatHealLowestHP = cachedHostiles.sort(([, cachedHostileMemoryA], [, cachedHostileMemoryB]) => cachedHostileMemoryA.health.hits - cachedHostileMemoryB.health.hits);
-                    const hostileIdUnknown = cachedHostilesThatHealLowestHP[0][0];
-                    const hostileId = hostileIdUnknown;
-                    const hostile = Game.getObjectById(hostileId);
-                    if (hostile) {
-                        return hostile;
-                    }
-                }
-            }
-        }
-    }
-    return undefined;
-}
-
-class TowerOperator {
-    constructor() {
-        if (Memory.rooms) {
-            Object.entries(Memory.rooms).forEach(([roomName]) => {
-                const towersInMemory = Memory.rooms[roomName].monitoring.structures.towers;
-                if (towersInMemory) {
-                    Object.entries(towersInMemory).forEach(([towerIdString]) => {
-                        const towerId = towerIdString;
-                        const tower = Game.getObjectById(towerId);
-                        if (tower) {
-                            this.createTowerFeederJob(tower);
-                            this.operateTowers(tower);
-                        }
-                    });
-                }
-            });
-        }
-    }
-    createTowerFeederJob(tower) {
-        const jobParameters = {
-            status: "fetchingResource",
-            room: tower.room.name,
-            jobType: "feedTower",
-            towerId: tower.id
-        };
-        new FeedTowerJob(jobParameters);
-    }
-    operateTowers(tower) {
-        if (!this.attackHostiles(tower)) {
-            this.repairRoads(tower);
-        }
-    }
-    attackHostiles(tower) {
-        const hostileCreep = fetchHostileCreep(tower.room);
-        if (hostileCreep) {
-            const attackResult = tower.attack(hostileCreep);
-            console.log(`Attack result on ${hostileCreep.name}: ${attackResult}`);
-            if (attackResult === OK) {
-                return true;
-            }
-        }
-        return false;
-    }
-    repairRoads(tower) {
-        const roadsInMemory = tower.room.memory.monitoring.structures.roads;
-        if (roadsInMemory) {
-            const roadToRepairObject = Object.entries(roadsInMemory).sort(
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            ([, cachedRoadA], [, cachedRoadB]) => cachedRoadA.structure.hits - cachedRoadB.structure.hits);
-            if (roadToRepairObject[0]) {
-                const roadToRepairId = roadToRepairObject[0][0];
-                const roadToRepair = Game.getObjectById(roadToRepairId);
-                if (roadToRepair) {
-                    tower.repair(roadToRepair);
-                }
-                else {
-                    delete Memory.rooms[tower.pos.roomName].monitoring.structures.roads[roadToRepairId];
-                }
-            }
-        }
-    }
-}
-
-class Operator {
-    constructor() {
-        this.runOperators();
-    }
-    runOperators() {
-        this.runRoomOperator();
-        this.runControllerOperator();
-        this.runSourceOperator();
-        this.runSpawnOperator();
-        this.runTowerOperator();
-        this.runQueueOperator();
-        this.runCreepOperator();
-        this.runLinkOperator();
-        this.runConstructionSiteOperator();
-        this.runGameOperator();
-    }
-    runControllerOperator() {
-        new ControllerOperator();
-    }
-    runSourceOperator() {
-        new SourceOperator();
-    }
-    runQueueOperator() {
-        new QueueOperator();
-    }
-    runSpawnOperator() {
-        new SpawnOperator();
-    }
-    runTowerOperator() {
-        new TowerOperator();
-    }
-    runCreepOperator() {
-        new CreepOperator();
-    }
-    runLinkOperator() {
-        new LinkOperator();
-    }
-    runConstructionSiteOperator() {
-        new ConstructionSiteOperator();
-    }
-    runRoomOperator() {
-        new RoomOperator();
-    }
-    runGameOperator() {
-        new GameOperator();
-    }
-}
-
-class JobQueue {
-    constructor() {
-        this.initalizeJobQueueMemory();
-    }
-    initalizeJobQueueMemory() {
-        if (!Memory.queues.jobs) {
-            Memory.queues.jobs = {};
-        }
-    }
-}
-
-class SpawnQueue {
-    constructor() {
-        this.initalizeSpawnQueueMemory();
-    }
-    initalizeSpawnQueueMemory() {
-        if (!Memory.queues.spawn) {
-            Memory.queues.spawn = {};
-        }
-    }
-}
-
-class Queue {
-    constructor() {
-        this.initalizeQueueMemory();
-        this.runQueues();
-    }
-    initalizeQueueMemory() {
+    maintainQueueMemoryHealth() {
         if (!Memory.queues) {
-            Memory.queues = {
-                jobs: {},
-                spawn: {}
-            };
+            this.initializeQueueMemory();
         }
-    }
-    runQueues() {
-        this.runJobQueue();
-        this.runSpawnQueue();
-    }
-    runSpawnQueue() {
-        new SpawnQueue();
-    }
-    runJobQueue() {
-        new JobQueue();
-    }
-}
-
-const garbageCollect = {
-    creeps() {
-        for (const name in Memory.creeps) {
-            if (!(name in Game.creeps)) {
-                Log.Debug(`Clearing ${name} Creep Memory`);
-                delete Memory.creeps[name];
+        else {
+            if (!Memory.queues.spawnQueue || !Memory.queues.jobQueue) {
+                if (!Memory.queues.spawnQueue) {
+                    this.initializeSpawnQueueMemory();
+                }
+                else {
+                    if (!Memory.queues.jobQueue) {
+                        this.initializeJobQueueMemory();
+                    }
+                }
             }
         }
     }
-};
+    initializeQueueMemory() {
+        Memory.queues = {
+            jobQueue: {},
+            spawnQueue: {}
+        };
+    }
+    initializeSpawnQueueMemory() {
+        Memory.queues.spawnQueue = {};
+    }
+    initializeJobQueueMemory() {
+        Memory.queues.jobQueue = {};
+    }
+}
+
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+class RoomMemory {
+    constructor(roomName) {
+        const roomMemorySchematic = {
+            monitoring: {
+                constructionSites: {},
+                droppedResources: {},
+                energy: {
+                    history: {}
+                },
+                hostiles: {},
+                sources: {},
+                structures: {
+                    spawns: {},
+                    extensions: {},
+                    roads: {},
+                    towers: {},
+                    links: {},
+                    other: {}
+                }
+            },
+            queues: {
+                spawnQueue: {}
+            }
+        };
+        this.roomMemorySchematic = roomMemorySchematic;
+        this.roomName = roomName;
+        this.maintainRoomMemoryHealth();
+    }
+    maintainRoomMemoryHealth(pastKey, memoryDictionary) {
+        if (!memoryDictionary) {
+            if (!Memory.rooms[this.roomName]) {
+                Memory.rooms[this.roomName] = this.roomMemorySchematic;
+            }
+            Object.entries(this.roomMemorySchematic).forEach(([key, value]) => {
+                if (!Memory.rooms[this.roomName][key]) {
+                    Memory.rooms[this.roomName][key] = value;
+                }
+                else {
+                    this.maintainRoomMemoryHealth([key], value);
+                }
+            });
+        }
+        else {
+            Object.entries(memoryDictionary).forEach(([key, value]) => {
+                if (pastKey) {
+                    if (pastKey.length === 1) {
+                        if (!Memory.rooms[this.roomName][pastKey[0]][key]) {
+                            Memory.rooms[this.roomName][pastKey[0]][key] = value;
+                        }
+                        else {
+                            const newKey = pastKey.concat(key);
+                            this.maintainRoomMemoryHealth(newKey, value);
+                        }
+                    }
+                    else {
+                        let setMemoryCommand = "";
+                        pastKey.forEach(lastKey => {
+                            setMemoryCommand = `${setMemoryCommand}['${lastKey}']`;
+                        });
+                        setMemoryCommand = `${setMemoryCommand}['${key}']`;
+                        setMemoryCommand = `Memory.rooms['${this.roomName}']${setMemoryCommand} = {}`;
+                        // eslint-disable-next-line no-eval
+                        eval(setMemoryCommand);
+                    }
+                }
+            });
+        }
+    }
+}
+
+class MemoryController {
+    constructor() {
+        this.maintainMemory();
+    }
+    maintainMemory() {
+        this.maintainQueueMemory();
+        this.maintainRoomMemory();
+    }
+    maintainQueueMemory() {
+        new QueueMemory();
+    }
+    maintainRoomMemory() {
+        if (!Memory.rooms) {
+            Memory.rooms = {};
+        }
+        const roomsToAddToMemory = roomOperations.generateRoomsArray();
+        roomsToAddToMemory.forEach(roomName => {
+            new RoomMemory(roomName);
+        });
+    }
+}
 
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
 // This utility uses source maps to get the line numbers and file names of the original, TS source code
 const loop = () => {
     Log.Informational(`Current game tick is ${Game.time}`);
     garbageCollect.creeps();
+    new MemoryController();
+    new Monitor();
     new Queue();
     new Operator();
     new GameMonitor();

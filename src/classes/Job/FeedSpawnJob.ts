@@ -5,7 +5,7 @@ export class FeedSpawnJob {
   public JobParameters: FeedSpawnJobParameters;
   public constructor(JobParameters: FeedSpawnJobParameters, count = 1) {
     this.JobParameters = JobParameters;
-    Object.entries(Memory.queues.jobs)
+    Object.entries(Memory.queues.jobQueue)
       .filter(
         ([, jobMemory]) =>
           jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
@@ -29,9 +29,9 @@ export class FeedSpawnJob {
     }
   }
   private createJob(UUID: string, index: number) {
-    if (!Memory.queues.jobs[UUID]) {
+    if (!Memory.queues.jobQueue[UUID]) {
       Log.Informational(`Creating "FeedSpawnJob" for Room "${this.JobParameters.room} with the UUID of ${UUID}"`);
-      Memory.queues.jobs[UUID] = {
+      Memory.queues.jobQueue[UUID] = {
         jobParameters: {
           uuid: UUID,
           status: "fetchingResource",
@@ -46,9 +46,9 @@ export class FeedSpawnJob {
     }
   }
   private deleteJob(UUID: string) {
-    if (Memory.queues.jobs[UUID]) {
+    if (Memory.queues.jobQueue[UUID]) {
       Log.Informational(`Deleting "FeedSpawnJob" for Room "${this.JobParameters.room} with the UUID of ${UUID}"`);
-      delete Memory.queues.jobs[UUID];
+      delete Memory.queues.jobQueue[UUID];
     }
   }
 }

@@ -13,11 +13,14 @@ declare global {
       | "lootResource"
       | "scoutRoom"
       | "claimRoom"
-      | "reserveRoom";
+      | "reserveRoom"
+      | "transportResource";
     sourceId?: Id<Source>;
     towerId?: Id<StructureTower>;
     controllerId?: Id<StructureController>;
     linkId?: Id<StructureLink>;
     room: string;
+    resourceType?: ResourceConstant;
+    storage?: Id<StructureStorage>;
   }
 }

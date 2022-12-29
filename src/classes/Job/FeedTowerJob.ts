@@ -5,7 +5,7 @@ export class FeedTowerJob {
   public JobParameters: FeedTowerJobParameters;
   public constructor(JobParameters: FeedTowerJobParameters, count = 1) {
     this.JobParameters = JobParameters;
-    Object.entries(Memory.queues.jobs)
+    Object.entries(Memory.queues.jobQueue)
       .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
       .forEach(([jobUUID, jobMemory]) => {
         if (jobMemory.index > count) {
@@ -25,11 +25,11 @@ export class FeedTowerJob {
     }
   }
   private createJob(UUID: string, index: number) {
-    if (!Memory.queues.jobs[UUID]) {
+    if (!Memory.queues.jobQueue[UUID]) {
       Log.Informational(
         `Creating "FeedTowerJob" for Tower ID "${this.JobParameters.towerId} with the UUID of ${UUID}"`
       );
-      Memory.queues.jobs[UUID] = {
+      Memory.queues.jobQueue[UUID] = {
         jobParameters: {
           uuid: UUID,
           status: "fetchingResource",
@@ -45,11 +45,11 @@ export class FeedTowerJob {
     }
   }
   private deleteJob(UUID: string) {
-    if (Memory.queues.jobs[UUID]) {
+    if (Memory.queues.jobQueue[UUID]) {
       Log.Informational(
         `Deleting "FeedTowerJob" for Tower ID "${this.JobParameters.towerId} with the UUID of ${UUID}"`
       );
-      delete Memory.queues.jobs[UUID];
+      delete Memory.queues.jobQueue[UUID];
     }
   }
 }

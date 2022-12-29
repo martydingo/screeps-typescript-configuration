@@ -14,7 +14,8 @@ declare global {
         | LootResourceJobParameters
         | ScoutRoomJobParameters
         | ClaimRoomJobParameters
-        | ReserveRoomJobParameters;
+        | ReserveRoomJobParameters
+        | TransportResourceJobParameters;
       jobType: string;
       timeAdded: Game["time"];
       assignedCreep?: Id<Creep>;

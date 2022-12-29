@@ -4,7 +4,7 @@ import { Log } from "classes/Log";
 export class ReserveRoomCreep extends BaseCreep {
   public constructor(creep: Creep) {
     super(creep);
-    // this.runCreep(creep);
+    this.runCreep(creep);
   }
   private runCreep(creep: Creep) {
     this.moveHome(creep);

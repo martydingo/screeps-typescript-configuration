@@ -17,12 +17,12 @@ export class Operator {
     this.runRoomOperator();
     this.runControllerOperator();
     this.runSourceOperator();
-    this.runSpawnOperator();
     this.runTowerOperator();
-    this.runQueueOperator();
     this.runCreepOperator();
     this.runLinkOperator();
     this.runConstructionSiteOperator();
+    this.runQueueOperator();
+    this.runSpawnOperator();
     this.runGameOperator();
   }
   private runControllerOperator() {

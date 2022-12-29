@@ -15,8 +15,6 @@ export class RoomMonitor {
   public constructor(RoomName: string) {
     this.roomName = RoomName;
     this.room = Game.rooms[RoomName];
-    // this.setupRoomMonitoringMemory();
-    this.setupRoomMemory();
     if (this.room) {
       this.runChildMonitors();
     }
@@ -35,7 +33,6 @@ export class RoomMonitor {
           },
           hostiles: {},
           sources: {},
-          spawnQueue: {},
           structures: {
             spawns: {},
             extensions: {},
@@ -44,6 +41,9 @@ export class RoomMonitor {
             links: {},
             other: {}
           }
+        },
+        queues: {
+          spawnQueue: {}
         }
       };
     } else if (!Memory.rooms[this.roomName].monitoring) {
@@ -55,7 +55,6 @@ export class RoomMonitor {
         },
         hostiles: {},
         sources: {},
-        spawnQueue: {},
         structures: {
           spawns: {},
           extensions: {},

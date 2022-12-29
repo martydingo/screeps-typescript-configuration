@@ -1,24 +1,20 @@
 import { ClaimRoomJob } from "classes/Job/ClaimRoomJob";
+import { ReserveRoomJob } from "classes/Job/ReserveRoomJob";
 import { RoomMonitor } from "classes/Monitor/RoomMonitor";
 import { ScoutRoomJob } from "classes/Job/ScoutRoomJob";
 import { findPath } from "common/findPath";
+import { myScreepsUsername } from "configuration/user";
 import { roomsToClaim } from "configuration/rooms/roomsToClaim";
 import { roomsToMine } from "configuration/rooms/roomsToMine";
-import { ReserveRoomJob } from "classes/Job/ReserveRoomJob";
-import { myScreepsUsername } from "configuration/user";
+import { roomOperations } from "common/roomOperations";
 
 export class RoomOperator {
   public constructor() {
-    const roomsToOperate: string[] = [];
-    roomsToOperate.concat(roomsToMine);
-    roomsToOperate.concat(roomsToClaim);
-    Object.entries(Game.rooms).forEach(([roomName]) => {
-      roomsToOperate.push(roomName);
-    });
+    const roomsToOperate: string[] = roomOperations.generateRoomsArray();
+
     //
     roomsToOperate.forEach(roomName => {
       // console.log(`${Game.time.toString()} - ${roomName}`);
-      this.runRoomMonitor(roomName);
       const room = Game.rooms[roomName];
       if (room) {
         const roomController = room.controller;
@@ -26,16 +22,12 @@ export class RoomOperator {
           if (roomController.my) {
             // No Room Operations Required
           } else {
-            if (roomsToClaim) {
-              if (roomsToClaim.includes(roomName)) {
-                this.createClaimRoomJob(roomName);
-              }
+            if (roomOperations.generateRoomsArray("claim").includes(roomName)) {
+              this.createClaimRoomJob(roomName);
             }
-            if (roomsToMine) {
-              if (roomsToMine.includes(roomName)) {
-                if (!(room.controller?.reservation?.username === myScreepsUsername)) {
-                  this.createReserveRoomJob(roomName);
-                }
+            if (roomOperations.generateRoomsArray("mine").includes(roomName)) {
+              if (!(room.controller?.reservation?.username === myScreepsUsername)) {
+                this.createReserveRoomJob(roomName);
               }
             }
           }
@@ -44,9 +36,6 @@ export class RoomOperator {
         this.createScoutRoomJob(roomName);
       }
     });
-  }
-  private runRoomMonitor(roomName: string): void {
-    new RoomMonitor(roomName);
   }
   private createScoutRoomJob(roomName: string): void {
     const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
