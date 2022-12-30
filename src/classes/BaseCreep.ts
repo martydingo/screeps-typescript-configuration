@@ -9,10 +9,30 @@ export class BaseCreep {
   public checkIfFull(creep: Creep, resource: ResourceConstant): void {
     if (creep.memory.status === "fetchingResource") {
       if (creep.store.getFreeCapacity(resource) === 0) {
-        creep.memory.status = "working";
+        if (creep.store.getCapacity(resource) === creep.store[resource]) {
+          creep.memory.status = "working";
+        } else {
+          if (creep.store.getFreeCapacity(resource) === 0) {
+            Object.entries(creep.store).forEach(([resourceType]) => {
+              if (resourceType !== resource) {
+                if (resourceType === RESOURCE_ENERGY) {
+                  if (creep.room.storage) {
+                    this.depositResource(creep, creep.room.storage, resourceType);
+                  }
+                } else {
+                  if (creep.room.terminal) {
+                    this.depositResource(creep, creep.room.terminal, resourceType as ResourceConstant);
+                  } else {
+                    creep.drop(resourceType as ResourceConstant);
+                  }
+                }
+              }
+            });
+          }
+        }
       }
     } else if (creep.memory.status === "working") {
-      if (creep.store[resource] === 0) {
+      if (creep.store[resource] === 0 && creep.store.getFreeCapacity(resource) > 0) {
         creep.memory.status = "fetchingResource";
       }
     }

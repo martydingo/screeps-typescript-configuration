@@ -291,7 +291,7 @@ const creepNumbers = {
     scoutRoom: 1,
     claimRoom: 1,
     reserveRoom: 1,
-    transportResource: 1,
+    transportResource: 2,
     terminalEngineer: 1,
     labEngineer: 1
 };
@@ -448,11 +448,34 @@ class BaseCreep {
     checkIfFull(creep, resource) {
         if (creep.memory.status === "fetchingResource") {
             if (creep.store.getFreeCapacity(resource) === 0) {
-                creep.memory.status = "working";
+                if (creep.store.getCapacity(resource) === creep.store[resource]) {
+                    creep.memory.status = "working";
+                }
+                else {
+                    if (creep.store.getFreeCapacity(resource) === 0) {
+                        Object.entries(creep.store).forEach(([resourceType]) => {
+                            if (resourceType !== resource) {
+                                if (resourceType === RESOURCE_ENERGY) {
+                                    if (creep.room.storage) {
+                                        this.depositResource(creep, creep.room.storage, resourceType);
+                                    }
+                                }
+                                else {
+                                    if (creep.room.terminal) {
+                                        this.depositResource(creep, creep.room.terminal, resourceType);
+                                    }
+                                    else {
+                                        creep.drop(resourceType);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
             }
         }
         else if (creep.memory.status === "working") {
-            if (creep.store[resource] === 0) {
+            if (creep.store[resource] === 0 && creep.store.getFreeCapacity(resource) > 0) {
                 creep.memory.status = "fetchingResource";
             }
         }
@@ -1496,46 +1519,14 @@ class FeedLinkJob {
     }
 }
 
-const linkConfig = {
-    W56N12: {
-        "6397f1bd30238608dae79135": "tx",
-        "639b23129ab55f8634547d74": "rx",
-        "63a3c1f82064b45cf37c59d8": "rx"
-    }
-};
-
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 class LinkOperator {
     constructor() {
         this.operateLinks();
     }
-    setLinkMode(link) {
-        const linkRoom = link.pos.roomName;
-        const linkId = link.id;
-        const roomLinkConfig = linkConfig[linkRoom];
-        if (roomLinkConfig) {
-            if (roomLinkConfig[linkId]) {
-                Memory.rooms[linkRoom].monitoring.structures.links[linkId].mode = roomLinkConfig[linkId];
-            }
-        }
-    }
     operateLinks() {
         Object.entries(Game.rooms).forEach(([roomName]) => {
             if (Memory.rooms[roomName].monitoring.structures.links) {
-                Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
-                    const linkId = linkIdString;
-                    const link = Game.getObjectById(linkId);
-                    if (link) {
-                        if (!Memory.rooms[roomName].monitoring.structures.links[linkId].mode) {
-                            this.setLinkMode(link);
-                        }
-                        const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
-                        if (linkMode === "tx") {
-                            this.createLinkFeederJob(link);
-                            this.transmitEnergy(link);
-                        }
-                    }
-                });
                 Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
                     const linkId = linkIdString;
                     const link = Game.getObjectById(linkId);
@@ -4758,14 +4749,34 @@ class LabMonitor {
     }
 }
 
+const linkConfig = {
+    W56N12: {
+        "6397f1bd30238608dae79135": "tx",
+        "639b23129ab55f8634547d74": "rx",
+        "63a3c1f82064b45cf37c59d8": "rx"
+    }
+};
+
 class LinkMonitor {
     constructor(link) {
-        this.initalizeLinkMonitorMemory(link);
         this.monitorLinks(link);
+        this.initalizeLinkMonitorModes(link);
     }
-    initalizeLinkMonitorMemory(link) {
-        if (!link.room.memory.monitoring.structures.links) {
-            link.room.memory.monitoring.structures.links = {};
+    initalizeLinkMonitorModes(link) {
+        if (link) {
+            if (!Memory.rooms[link.pos.roomName].monitoring.structures.links[link.id].mode) {
+                this.setLinkMode(link);
+            }
+        }
+    }
+    setLinkMode(link) {
+        const linkRoom = link.pos.roomName;
+        const linkId = link.id;
+        const roomLinkConfig = linkConfig[linkRoom];
+        if (roomLinkConfig) {
+            if (roomLinkConfig[linkId]) {
+                Memory.rooms[linkRoom].monitoring.structures.links[linkId].mode = roomLinkConfig[linkId];
+            }
         }
     }
     monitorLinks(link) {

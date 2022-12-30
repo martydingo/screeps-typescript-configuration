@@ -1,11 +1,25 @@
+import { linkConfig } from "configuration/rooms/links/linkConfig";
+
 export class LinkMonitor {
   public constructor(link: StructureLink) {
-    this.initalizeLinkMonitorMemory(link);
     this.monitorLinks(link);
+    this.initalizeLinkMonitorModes(link);
   }
-  private initalizeLinkMonitorMemory(link: StructureLink) {
-    if (!link.room.memory.monitoring.structures.links) {
-      link.room.memory.monitoring.structures.links = {};
+  private initalizeLinkMonitorModes(link: StructureLink) {
+    if (link) {
+      if (!Memory.rooms[link.pos.roomName].monitoring.structures.links[link.id].mode) {
+        this.setLinkMode(link);
+      }
+    }
+  }
+  private setLinkMode(link: StructureLink): void {
+    const linkRoom = link.pos.roomName;
+    const linkId = link.id;
+    const roomLinkConfig = linkConfig[linkRoom];
+    if (roomLinkConfig) {
+      if (roomLinkConfig[linkId]) {
+        Memory.rooms[linkRoom].monitoring.structures.links[linkId].mode = roomLinkConfig[linkId];
+      }
     }
   }
   private monitorLinks(link: StructureLink): void {

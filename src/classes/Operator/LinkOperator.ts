@@ -9,33 +9,9 @@ export class LinkOperator {
   public constructor() {
     this.operateLinks();
   }
-  private setLinkMode(link: StructureLink): void {
-    const linkRoom = link.pos.roomName;
-    const linkId = link.id;
-    const roomLinkConfig = linkConfig[linkRoom];
-    if (roomLinkConfig) {
-      if (roomLinkConfig[linkId]) {
-        Memory.rooms[linkRoom].monitoring.structures.links[linkId].mode = roomLinkConfig[linkId];
-      }
-    }
-  }
   private operateLinks(): void {
     Object.entries(Game.rooms).forEach(([roomName]) => {
       if (Memory.rooms[roomName].monitoring.structures.links) {
-        Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
-          const linkId = linkIdString as Id<StructureLink>;
-          const link = Game.getObjectById(linkId);
-          if (link) {
-            if (!Memory.rooms[roomName].monitoring.structures.links[linkId].mode) {
-              this.setLinkMode(link);
-            }
-            const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
-            if (linkMode === "tx") {
-              this.createLinkFeederJob(link);
-              this.transmitEnergy(link);
-            }
-          }
-        });
         Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
           const linkId = linkIdString as Id<StructureLink>;
           const link = Game.getObjectById(linkId);
