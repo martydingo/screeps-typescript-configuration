@@ -4,5 +4,6 @@ declare global {
     spawnQueue: SpawnQueueMemory;
     terminalQueue: TerminalQueueMemory;
     labQueue: LabQueueMemory;
+    factoryQueue: FactoryQueueMemory;
   }
 }

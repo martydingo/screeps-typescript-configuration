@@ -16,7 +16,8 @@ declare global {
       | "reserveRoom"
       | "transportResource"
       | "terminalEngineer"
-      | "labEngineer";
+      | "labEngineer"
+      | "factoryEngineer";
     sourceId?: Id<Source>;
     towerId?: Id<StructureTower>;
     controllerId?: Id<StructureController>;
@@ -26,5 +27,6 @@ declare global {
     storage?: Id<StructureStorage> | Id<StructureContainer>;
     terminalJobUUID?: string;
     labJobUUID?: string;
+    factoryJobUUID?: string;
   }
 }

@@ -7,6 +7,7 @@ declare global {
     energy: EnergyMonitorMemory;
     hostiles: HostileMonitorMemory;
     sources: SourceMonitorMemory;
+    minerals: MineralMonitorMemory;
     structures: StructureMonitorMemory;
   }
 }

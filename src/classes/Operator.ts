@@ -1,6 +1,7 @@
 import { ConstructionSiteOperator } from "./Operator/ConstructionSiteOperator";
 import { ControllerOperator } from "./Operator/ControllerOperator";
 import { CreepOperator } from "./Operator/CreepOperator";
+import { FactoryOperator } from "./Operator/FactoryOperator";
 import { GameOperator } from "./Operator/GameOperator";
 import { LabOperator } from "./Operator/LabOperator";
 import { LinkOperator } from "./Operator/LinkOperator";
@@ -28,6 +29,8 @@ export class Operator {
     this.runGameOperator();
     this.runTerminalOperator();
     this.runLabOperator();
+    this.runCreepOperator();
+    this.runFactoryOperator();
   }
   private runControllerOperator() {
     new ControllerOperator();
@@ -64,5 +67,8 @@ export class Operator {
   }
   private runGameOperator() {
     new GameOperator();
+  }
+  private runFactoryOperator() {
+    new FactoryOperator();
   }
 }

@@ -293,7 +293,8 @@ const creepNumbers = {
     reserveRoom: 1,
     transportResource: 1,
     terminalEngineer: 1,
-    labEngineer: 1
+    labEngineer: 1,
+    factoryEngineer: 1
 };
 
 class ConstructionSiteOperator {
@@ -763,6 +764,69 @@ class ClaimRoomCreep extends BaseCreep {
     }
 }
 
+class FactoryEngineerCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        if (creep.memory.status === "awaitingJob") {
+            if (Object.entries(creep.room.memory.queues.factoryQueue).length > 0) {
+                this.assignFactoryJob(creep);
+            }
+            else {
+                this.deassignFactoryJob(creep);
+            }
+        }
+        if (creep.memory.status !== "awaitingJob") {
+            if (creep.memory.factoryJobUUID) {
+                const nextJobParameters = creep.room.memory.queues.factoryQueue[creep.memory.factoryJobUUID];
+                if (nextJobParameters) {
+                    // Mux FactoryJobs
+                    switch (nextJobParameters.factoryJobType) {
+                        case "feedFactoryEnergy":
+                            this.runFeedFactoryEnergyJob(creep);
+                            break;
+                        default:
+                            Log.Alert(
+                            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+                            `FactoryEngineer ${creep.name} in room ${creep.room.name} cannot understand the factoryJobType: ${nextJobParameters.factoryJobType}`);
+                            break;
+                    }
+                }
+                else {
+                    this.deassignFactoryJob(creep);
+                }
+            }
+        }
+    }
+    assignFactoryJob(creep) {
+        const factoryJobs = Object.entries(creep.room.memory.queues.factoryQueue);
+        const nextFactoryJobUUID = factoryJobs.sort(([, factoryJobMemoryA], [, factoryJobMemoryB]) => factoryJobMemoryA.priority - factoryJobMemoryB.priority)[0][0];
+        creep.memory.factoryJobUUID = nextFactoryJobUUID;
+        creep.memory.status = "working";
+    }
+    deassignFactoryJob(creep) {
+        delete creep.memory.factoryJobUUID;
+        creep.memory.status = "awaitingJob";
+    }
+    runFeedFactoryEnergyJob(creep) {
+        this.checkIfFull(creep, RESOURCE_ENERGY);
+        if (creep.memory.status === "fetchingResource") {
+            this.fetchSource(creep, true);
+        }
+        else if (creep.memory.status === "working") {
+            const factoryMemory = creep.room.memory.monitoring.structures.factory;
+            if (factoryMemory) {
+                const factory = Game.getObjectById(factoryMemory.id);
+                if (factory) {
+                    this.depositResource(creep, factory, RESOURCE_ENERGY);
+                }
+            }
+        }
+    }
+}
+
 class FeedLinkCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
@@ -1201,110 +1265,169 @@ class CreepOperator {
         this.runCreeps();
     }
     runCreeps() {
-        this.runFeedSpawnCreeps();
-        this.runSourceMinerCreeps();
-        this.runFeedTowerCreeps();
-        this.runUpgradeControllerCreeps();
-        this.runLootResourceCreeps();
-        this.runTransportResourceCreeps();
-        this.runScoutRoomCreeps();
-        this.runReserveRoomCreeps();
-        this.runClaimRoomCreeps();
-        this.runBuildConstructionSiteCreeps();
-        this.runFeedLinkCreeps();
-        this.runTerminalEngineerCreeps();
-        this.runLabEngineerCreeps();
-    }
-    runSourceMinerCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "mineSource")
-            .forEach(([, creep]) => {
-            new SourceMinerCreep(creep);
+        Object.entries(Game.creeps).forEach(([, creepToOperate]) => {
+            const creepJobType = creepToOperate.memory.jobType;
+            switch (creepJobType) {
+                case "mineSource":
+                    new SourceMinerCreep(creepToOperate);
+                    break;
+                case "feedSpawn":
+                    new FeedSpawnCreep(creepToOperate);
+                    break;
+                case "feedTower":
+                    new FeedTowerCreep(creepToOperate);
+                    break;
+                case "feedLink":
+                    new FeedLinkCreep(creepToOperate);
+                    break;
+                case "upgradeController":
+                    new UpgradeControllerCreep(creepToOperate);
+                    break;
+                case "buildConstructionSite":
+                    new BuildConstructionSiteCreep(creepToOperate);
+                    break;
+                case "lootResource":
+                    new LootResourceCreep(creepToOperate);
+                    break;
+                case "transportResource":
+                    new TransportResourceCreep(creepToOperate);
+                    break;
+                case "scoutRoom":
+                    new ScoutRoomCreep(creepToOperate);
+                    break;
+                case "claimRoom":
+                    new ClaimRoomCreep(creepToOperate);
+                    break;
+                case "reserveRoom":
+                    new ReserveRoomCreep(creepToOperate);
+                    break;
+                case "terminalEngineer":
+                    new TerminalEngineerCreep(creepToOperate);
+                    break;
+                case "labEngineer":
+                    new LabEngineerCreep(creepToOperate);
+                    break;
+                case "factoryEngineer":
+                    new FactoryEngineerCreep(creepToOperate);
+                    break;
+                default:
+                    Log.Alert(
+                    // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+                    `${creepJobType} registered on ${creepToOperate.name} in ${creepToOperate.room.name} does not correspond with any valid jobTypes`);
+            }
         });
     }
-    runFeedSpawnCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "feedSpawn")
-            .forEach(([, creep]) => {
-            new FeedSpawnCreep(creep);
+}
+
+class FactoryEngineerJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
         });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.factoryId}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.factoryId}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
     }
-    runFeedTowerCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "feedTower")
-            .forEach(([, creep]) => {
-            new FeedTowerCreep(creep);
-        });
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "FactoryEngineerJob" for Factory ID: "${this.JobParameters.factoryId}" with the UUID "${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: "awaitingJob",
+                    room: this.JobParameters.room,
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    jobType: "factoryEngineer",
+                    factoryId: this.JobParameters.factoryId
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "factoryEngineer",
+                timeAdded: Game.time
+            };
+        }
     }
-    runFeedLinkCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "feedLink")
-            .forEach(([, creep]) => {
-            new FeedLinkCreep(creep);
-        });
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "FactoryEngineerJob" for Factory ID: "${this.JobParameters.factoryId}" with the UUID "${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
     }
-    runUpgradeControllerCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "upgradeController")
-            .forEach(([, creep]) => {
-            new UpgradeControllerCreep(creep);
-        });
+}
+
+class FactoryOperator {
+    constructor() {
+        if (Memory.rooms) {
+            Object.entries(Memory.rooms).forEach(([roomName]) => {
+                if (Memory.rooms[roomName]) {
+                    const factoryMemory = Memory.rooms[roomName].monitoring.structures.factory;
+                    if (factoryMemory) {
+                        const factory = Game.getObjectById(factoryMemory.id);
+                        if (factory) {
+                            this.manageFactoryJobs(factory);
+                            this.maintainFactoryEngineerJobs(factory);
+                        }
+                    }
+                }
+            });
+        }
     }
-    runBuildConstructionSiteCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "buildConstructionSite")
-            .forEach(([, creep]) => {
-            new BuildConstructionSiteCreep(creep);
-        });
+    manageFactoryJobs(factory) {
+        if (factory.store[RESOURCE_ENERGY] < FACTORY_CAPACITY / 10 && factory.store.getCapacity(RESOURCE_ENERGY) > 0) {
+            this.createFeedFactoryEnergyJob(factory);
+        }
+        else {
+            this.destroyFeedFactoryEnergyJob(factory);
+        }
     }
-    runLootResourceCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "lootResource")
-            .forEach(([, creep]) => {
-            new LootResourceCreep(creep);
-        });
+    createFeedFactoryEnergyJob(factory) {
+        const factoryJobName = "feedFactoryEnergy";
+        const factoryJobUuid = base64.encode(`${factory.id}-${factoryJobName}`);
+        if (factory.room.memory.queues.factoryQueue) {
+            factory.room.memory.queues.factoryQueue[factoryJobUuid] = {
+                factoryJobType: "feedFactoryEnergy",
+                priority: 1
+            };
+        }
     }
-    runTransportResourceCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "transportResource")
-            .forEach(([, creep]) => {
-            new TransportResourceCreep(creep);
-        });
+    destroyFeedFactoryEnergyJob(factory) {
+        const factoryJobName = "feedFactoryEnergy";
+        const factoryJobUuid = base64.encode(`${factory.id}-${factoryJobName}`);
+        if (factory.room.memory.queues.factoryQueue) {
+            if (factory.room.memory.queues.factoryQueue[factoryJobUuid]) {
+                delete factory.room.memory.queues.factoryQueue[factoryJobUuid];
+            }
+        }
     }
-    runScoutRoomCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "scoutRoom")
-            .forEach(([, creep]) => {
-            new ScoutRoomCreep(creep);
-        });
-    }
-    runClaimRoomCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "claimRoom")
-            .forEach(([, creep]) => {
-            new ClaimRoomCreep(creep);
-        });
-    }
-    runReserveRoomCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "reserveRoom")
-            .forEach(([, creep]) => {
-            new ReserveRoomCreep(creep);
-        });
-    }
-    runTerminalEngineerCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "terminalEngineer")
-            .forEach(([, creep]) => {
-            new TerminalEngineerCreep(creep);
-        });
-    }
-    runLabEngineerCreeps() {
-        Object.entries(Game.creeps)
-            .filter(([, Creep]) => Creep.memory.jobType === "labEngineer")
-            .forEach(([, creep]) => {
-            new LabEngineerCreep(creep);
-        });
+    maintainFactoryEngineerJobs(factory) {
+        if (factory) {
+            const jobParameters = {
+                room: factory.pos.roomName,
+                status: "awaitingJob",
+                jobType: "factoryEngineer",
+                factoryId: factory.id
+            };
+            let count = creepNumbers[jobParameters.jobType];
+            const factoryJobs = Object.entries(factory.room.memory.queues.factoryQueue);
+            if (factoryJobs.length === 0) {
+                count = 0;
+            }
+            new FactoryEngineerJob(jobParameters, count);
+        }
     }
 }
 
@@ -1576,6 +1699,7 @@ const creepBodyParts = {
         mineSource: [WORK, WORK, MOVE, CARRY],
         workTerminal: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         feedSpawn: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
+        factoryEngineer: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         terminalEngineer: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         labEngineer: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         transportResource: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
@@ -1593,6 +1717,7 @@ const creepBodyParts = {
         mineSource: [WORK, WORK, WORK, WORK, MOVE, MOVE, CARRY],
         workTerminal: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         feedSpawn: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        factoryEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         terminalEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         labEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         transportResource: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
@@ -1627,6 +1752,24 @@ const creepBodyParts = {
             MOVE
         ],
         feedSpawn: [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        factoryEngineer: [
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE
+        ],
         terminalEngineer: [
             CARRY,
             CARRY,
@@ -1722,6 +1865,34 @@ const creepBodyParts = {
             MOVE
         ],
         feedSpawn: [
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE
+        ],
+        factoryEngineer: [
             CARRY,
             CARRY,
             CARRY,
@@ -1928,6 +2099,44 @@ const creepBodyParts = {
             CARRY
         ],
         feedSpawn: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY
+        ],
+        factoryEngineer: [
             MOVE,
             MOVE,
             MOVE,
@@ -2202,6 +2411,54 @@ const creepBodyParts = {
             CARRY
         ],
         feedSpawn: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY
+        ],
+        factoryEngineer: [
             MOVE,
             MOVE,
             MOVE,
@@ -2585,6 +2842,58 @@ const creepBodyParts = {
             CARRY,
             CARRY
         ],
+        factoryEngineer: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY
+        ],
         terminalEngineer: [
             MOVE,
             MOVE,
@@ -2908,6 +3217,58 @@ const creepBodyParts = {
             CARRY
         ],
         feedSpawn: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY
+        ],
+        factoryEngineer: [
             MOVE,
             MOVE,
             MOVE,
@@ -3508,7 +3869,8 @@ function creepPriority(room) {
         claimRoom: 11,
         buildConstructionSite: 12,
         terminalEngineer: 13,
-        labEngineer: 14
+        labEngineer: 14,
+        factoryEngineer: 15
     };
     if (room) {
         let storageContainsEnergy = false;
@@ -3542,7 +3904,8 @@ function creepPriority(room) {
                 workTerminal: priority.workTerminal,
                 lootResource: priority.lootResource,
                 terminalEngineer: priority.terminalEngineer,
-                labEngineer: priority.labEngineer
+                labEngineer: priority.labEngineer,
+                factoryEngineer: priority.factoryEngineer
             };
         }
     }
@@ -4375,6 +4738,8 @@ class Operator {
         this.runGameOperator();
         this.runTerminalOperator();
         this.runLabOperator();
+        this.runCreepOperator();
+        this.runFactoryOperator();
     }
     runControllerOperator() {
         new ControllerOperator();
@@ -4411,6 +4776,9 @@ class Operator {
     }
     runGameOperator() {
         new GameOperator();
+    }
+    runFactoryOperator() {
+        new FactoryOperator();
     }
 }
 
@@ -4617,6 +4985,23 @@ class HostileMonitor {
     }
 }
 
+class MineralMonitor {
+    constructor(mineralId) {
+        this.mineralId = mineralId;
+        this.monitorMineral();
+    }
+    monitorMineral() {
+        const mineral = Game.getObjectById(this.mineralId);
+        if (mineral) {
+            const roomName = mineral.pos.roomName;
+            Memory.rooms[roomName].monitoring.minerals[this.mineralId] = {
+                remainingMineral: mineral.mineralAmount,
+                mineralType: mineral.mineralType
+            };
+        }
+    }
+}
+
 class SourceMonitor {
     constructor(sourceId) {
         this.sourceId = sourceId;
@@ -4712,6 +5097,30 @@ class ExtensionMonitor {
             extension.room.memory.monitoring.structures.extensions[extension.id] = {
                 energyAvailable: extension.store[RESOURCE_ENERGY],
                 energyCapacity: extension.store.getCapacity(RESOURCE_ENERGY)
+            };
+        }
+    }
+}
+
+class FactoryMonitor {
+    constructor(factory) {
+        this.monitorFactory(factory);
+    }
+    monitorFactory(factory) {
+        if (factory) {
+            const factoryStorage = {};
+            Object.entries(factory.store).forEach(([resourceName]) => {
+                const resourceNameTyped = resourceName;
+                factoryStorage[resourceName] = { amount: factory.store[resourceNameTyped] };
+            });
+            factory.room.memory.monitoring.structures.factory = {
+                resources: factoryStorage,
+                structure: {
+                    hits: factory.hits,
+                    hitsMax: factory.hitsMax
+                },
+                cooldown: factory.cooldown,
+                id: factory.id
             };
         }
     }
@@ -4969,6 +5378,9 @@ class StructureMonitor {
                 else if (Structure.structureType === STRUCTURE_TERMINAL) {
                     new TerminalMonitor(Structure);
                 }
+                else if (Structure.structureType === STRUCTURE_FACTORY) {
+                    new FactoryMonitor(Structure);
+                }
                 else {
                     this.room.memory.monitoring.structures.other[Structure.id] = {
                         structureType: Structure.structureType
@@ -4994,6 +5406,7 @@ class RoomMonitor {
         this.runSourceMonitors();
         this.runDroppedResourceMonitors();
         this.runConstructionSiteMonitors();
+        this.runMineralMonitors();
     }
     runStructureMonitor() {
         if (this.room.controller) {
@@ -5009,6 +5422,11 @@ class RoomMonitor {
     runSourceMonitors() {
         this.room.find(FIND_SOURCES).forEach(source => {
             new SourceMonitor(source.id);
+        });
+    }
+    runMineralMonitors() {
+        this.room.find(FIND_MINERALS).forEach(mineral => {
+            new MineralMonitor(mineral.id);
         });
     }
     runDroppedResourceMonitors() {
@@ -5079,6 +5497,7 @@ class RoomMemoryController {
                 },
                 hostiles: {},
                 sources: {},
+                minerals: {},
                 structures: {
                     spawns: {},
                     extensions: {},
@@ -5094,7 +5513,8 @@ class RoomMemoryController {
             queues: {
                 spawnQueue: {},
                 terminalQueue: {},
-                labQueue: {}
+                labQueue: {},
+                factoryQueue: {}
             }
         };
         this.roomMemorySchematic = roomMemorySchematic;
@@ -5128,14 +5548,19 @@ class RoomMemoryController {
                         }
                     }
                     else {
-                        let setMemoryCommand = "";
+                        let path = "";
                         pastKey.forEach(lastKey => {
-                            setMemoryCommand = `${setMemoryCommand}['${lastKey}']`;
+                            path = `${path}['${lastKey}']`;
                         });
-                        setMemoryCommand = `${setMemoryCommand}['${key}']`;
-                        setMemoryCommand = `Memory.rooms['${this.roomName}']${setMemoryCommand} = {}`;
+                        path = `${path}['${key}']`;
+                        const setMemoryCommand = `Memory.rooms['${this.roomName}']${path} = {}`;
+                        const memoryExistsCommand = `!(Memory.rooms['${this.roomName}']${path} === undefined)`;
                         // eslint-disable-next-line no-eval
-                        eval(setMemoryCommand);
+                        const memoryExists = eval(memoryExistsCommand);
+                        if (!memoryExists) {
+                            // eslint-disable-next-line no-eval
+                            eval(setMemoryCommand);
+                        }
                     }
                 }
             });

@@ -3,6 +3,7 @@ declare global {
   interface StructureMonitorMemory {
     controller?: ControllerMonitorMemory;
     terminal?: TerminalMonitorMemory;
+    factory?: FactoryMonitorMemory;
     labs: LabMonitorMemory;
     spawns: SpawnMonitorMemory;
     extensions: ExtensionMonitorMemory;

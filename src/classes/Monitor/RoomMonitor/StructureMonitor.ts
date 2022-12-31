@@ -1,6 +1,7 @@
 import { ContainerMonitor } from "./StructureMonitor/ContainerMonitor";
 import { ControllerMonitor } from "./StructureMonitor/ControllerMonitor";
 import { ExtensionMonitor } from "./StructureMonitor/ExtensionMonitor";
+import { FactoryMonitor } from "./StructureMonitor/FactoryMonitor";
 import { LabMonitor } from "./StructureMonitor/LabMonitor";
 import { LinkMonitor } from "./StructureMonitor/LinkMonitor";
 import { RoadMonitor } from "./StructureMonitor/RoadMonitor";
@@ -39,6 +40,8 @@ export class StructureMonitor {
           new LabMonitor(Structure);
         } else if (Structure.structureType === STRUCTURE_TERMINAL) {
           new TerminalMonitor(Structure);
+        } else if (Structure.structureType === STRUCTURE_FACTORY) {
+          new FactoryMonitor(Structure);
         } else {
           this.room.memory.monitoring.structures.other[Structure.id] = {
             structureType: Structure.structureType

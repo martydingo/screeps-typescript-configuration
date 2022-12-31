@@ -21,7 +21,8 @@ declare global {
         | ReserveRoomJobParameters
         | TransportResourceJobParameters
         | TerminalEngineerJobParameters
-        | LabEngineerJobParameters;
+        | LabEngineerJobParameters
+        | FactoryEngineerJobParameters;
     };
   }
 }

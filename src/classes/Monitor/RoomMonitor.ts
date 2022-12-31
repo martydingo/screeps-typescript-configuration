@@ -2,6 +2,7 @@ import { ConstructionSiteMonitor } from "./RoomMonitor/ConstructionSiteMonitor";
 import { DroppedResourceMonitor } from "./RoomMonitor/DroppedResourceMonitor";
 import { EnergyMonitor } from "./RoomMonitor/EnergyMonitor";
 import { HostileMonitor } from "./RoomMonitor/HostileMonitor";
+import { MineralMonitor } from "./RoomMonitor/MineralMonitor";
 import { SourceMonitor } from "./RoomMonitor/SourceMonitor";
 import { StructureMonitor } from "./RoomMonitor/StructureMonitor";
 
@@ -26,6 +27,7 @@ export class RoomMonitor {
     this.runSourceMonitors();
     this.runDroppedResourceMonitors();
     this.runConstructionSiteMonitors();
+    this.runMineralMonitors();
   }
   private runStructureMonitor(): void {
     if (this.room.controller) {
@@ -41,6 +43,11 @@ export class RoomMonitor {
   private runSourceMonitors(): void {
     this.room.find(FIND_SOURCES).forEach(source => {
       new SourceMonitor(source.id);
+    });
+  }
+  private runMineralMonitors(): void {
+    this.room.find(FIND_MINERALS).forEach(mineral => {
+      new MineralMonitor(mineral.id);
     });
   }
   private runDroppedResourceMonitors(): void {
