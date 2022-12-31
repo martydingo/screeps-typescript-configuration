@@ -13,7 +13,8 @@ export function creepPriority(room: Room): { [creepType: string]: number } {
     claimRoom: 11,
     buildConstructionSite: 12,
     terminalEngineer: 13,
-    labEngineer: 14
+    labEngineer: 14,
+    factoryEngineer: 15
   };
   if (room) {
     let storageContainsEnergy = false;
@@ -47,7 +48,8 @@ export function creepPriority(room: Room): { [creepType: string]: number } {
         workTerminal: priority.workTerminal,
         lootResource: priority.lootResource,
         terminalEngineer: priority.terminalEngineer,
-        labEngineer: priority.labEngineer
+        labEngineer: priority.labEngineer,
+        factoryEngineer: priority.factoryEngineer
       };
     }
   }
