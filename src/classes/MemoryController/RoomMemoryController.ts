@@ -13,6 +13,7 @@ export class RoomMemoryController {
         },
         hostiles: {},
         sources: {},
+        minerals: {},
         structures: {
           spawns: {},
           extensions: {},
@@ -28,7 +29,8 @@ export class RoomMemoryController {
       queues: {
         spawnQueue: {},
         terminalQueue: {},
-        labQueue: {}
+        labQueue: {},
+        factoryQueue: {}
       }
     };
     this.roomMemorySchematic = roomMemorySchematic;
@@ -59,15 +61,20 @@ export class RoomMemoryController {
               this.maintainRoomMemoryHealth(newKey, value);
             }
           } else {
-            let setMemoryCommand = "";
+            let path = "";
             pastKey.forEach(lastKey => {
-              setMemoryCommand = `${setMemoryCommand}['${lastKey}']`;
+              path = `${path}['${lastKey}']`;
             });
-            setMemoryCommand = `${setMemoryCommand}['${key}']`;
-            setMemoryCommand = `Memory.rooms['${this.roomName}']${setMemoryCommand} = {}`;
+            path = `${path}['${key}']`;
+            const setMemoryCommand = `Memory.rooms['${this.roomName}']${path} = {}`;
+            const memoryExistsCommand = `!(Memory.rooms['${this.roomName}']${path} === undefined)`;
 
             // eslint-disable-next-line no-eval
-            eval(setMemoryCommand);
+            const memoryExists: boolean = eval(memoryExistsCommand);
+            if (!memoryExists) {
+              // eslint-disable-next-line no-eval
+              eval(setMemoryCommand);
+            }
           }
         }
       });
