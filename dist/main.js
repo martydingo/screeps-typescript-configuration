@@ -1494,8 +1494,8 @@ class LabEngineerJob {
 }
 
 const labConfiguration = {
-    W8N3: {
-        boostLab: "63a983d1da758c0321639c43"
+    W56N12: {
+        boostLab: "63a1e52f46d2f61382721fbf"
     }
 };
 
@@ -4101,7 +4101,7 @@ class ScoutRoomJob {
 
 const roomsToClaim = [];
 
-const roomsToMine = ["W8N2"];
+const roomsToMine = ["W56N11"];
 
 const roomOperations = {
     generateRoomsArray(roomOperation) {
@@ -5159,9 +5159,10 @@ class LabMonitor {
 }
 
 const linkConfig = {
-    W8N3: {
-        "63ab0a6e26553d03dcda0a60": "tx",
-        "63ab0b731b113d034be84db0": "rx"
+    W56N12: {
+        "6397f1bd30238608dae79135": "tx",
+        "639b23129ab55f8634547d74": "rx",
+        "63a3c1f82064b45cf37c59d8": "rx"
     }
 };
 
