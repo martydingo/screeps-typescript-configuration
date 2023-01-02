@@ -1,5 +1,5 @@
 export const labConfiguration: { [roomName: string]: { boostLab?: Id<StructureLab> } } = {
-  W8N3: {
-    boostLab: "63a983d1da758c0321639c43" as Id<StructureLab>
+  W56N12: {
+    boostLab: "63a1e52f46d2f61382721fbf" as Id<StructureLab>
   }
 };
