@@ -1,5 +1,5 @@
-import { profile } from "Profiler";
 import { BaseCreep } from "classes/BaseCreep";
+import { profile } from "Profiler";
 import { Log } from "classes/Log";
 
 @profile
@@ -32,7 +32,9 @@ export class ReserveRoomCreep extends BaseCreep {
                     );
                   }
                 }
-              } else Log.Warning(`Reserve Result for ${creep.name} in ${creep.pos.roomName}: ${reserveResult}`);
+              } else if (reserveResult !== OK) {
+                Log.Warning(`Reserve Result for ${creep.name} in ${creep.pos.roomName}: ${reserveResult}`);
+              }
             }
           }
         }

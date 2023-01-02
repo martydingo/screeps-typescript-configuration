@@ -1,7 +1,5 @@
-import { profile } from "Profiler";
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-@profile
 export class RoomMemoryController {
   private roomMemorySchematic;
   private roomName;

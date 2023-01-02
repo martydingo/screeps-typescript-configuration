@@ -1,8 +1,6 @@
-import { profile } from "Profiler";
 import { Log } from "classes/Log";
 import { base64 } from "common/utilities/base64";
 
-@profile
 export class MineSourceJob {
   public JobParameters: MineSourceJobParameters;
   public constructor(JobParameters: MineSourceJobParameters, count = 1) {

@@ -1,5 +1,4 @@
 'use strict';
-
 const __PROFILER_ENABLED__ = true
 
 Object.defineProperty(exports, '__esModule', { value: true });
@@ -243,33 +242,32 @@ GameMonitor = __decorate([
     profile
 ], GameMonitor);
 
-var Log_1;
-let Log = Log_1 = class Log {
+class Log {
     static Emergency(msg) {
-        console.log(Log_1.LogColor.Emergency + msg);
+        console.log(Log.LogColor.Emergency + msg);
     }
     static Alert(msg) {
-        console.log(Log_1.LogColor.Alert + msg);
+        console.log(Log.LogColor.Alert + msg);
     }
     static Critical(msg) {
-        console.log(Log_1.LogColor.Critical + msg);
+        console.log(Log.LogColor.Critical + msg);
     }
     static Error(msg) {
-        console.log(Log_1.LogColor.Error + msg);
+        console.log(Log.LogColor.Error + msg);
     }
     static Warning(msg) {
-        console.log(Log_1.LogColor.Warning + msg);
+        console.log(Log.LogColor.Warning + msg);
     }
     static Notice(msg) {
-        console.log(Log_1.LogColor.Notice + msg);
+        console.log(Log.LogColor.Notice + msg);
     }
     static Informational(msg) {
-        console.log(Log_1.LogColor.Informational + msg);
+        console.log(Log.LogColor.Informational + msg);
     }
     static Debug(msg) {
-        console.log(Log_1.LogColor.Debug + msg);
+        console.log(Log.LogColor.Debug + msg);
     }
-};
+}
 Log.LogColor = {
     Emergency: '<font color="#ff0000">',
     Alert: '<font color="#c00000">',
@@ -280,9 +278,6 @@ Log.LogColor = {
     Informational: '<font color="#aaaaaa">',
     Debug: '<font color="#666666">'
 };
-Log = Log_1 = __decorate([
-    profile
-], Log);
 
 /* eslint-disable no-bitwise */
 // Juszczak/base64-typescript-class.ts
@@ -367,7 +362,7 @@ class base64 {
 base64.PADCHAR = "=";
 base64.ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-let BuildConstructionSiteJob = class BuildConstructionSiteJob {
+class BuildConstructionSiteJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -415,10 +410,7 @@ let BuildConstructionSiteJob = class BuildConstructionSiteJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-BuildConstructionSiteJob = __decorate([
-    profile
-], BuildConstructionSiteJob);
+}
 
 const roomsToAvoid = [];
 
@@ -580,7 +572,7 @@ ConstructionSiteOperator = __decorate([
     profile
 ], ConstructionSiteOperator);
 
-let UpgradeControllerJob = class UpgradeControllerJob {
+class UpgradeControllerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -628,10 +620,7 @@ let UpgradeControllerJob = class UpgradeControllerJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-UpgradeControllerJob = __decorate([
-    profile
-], UpgradeControllerJob);
+}
 
 let ControllerOperator = class ControllerOperator {
     constructor() {
@@ -672,7 +661,7 @@ ControllerOperator = __decorate([
     profile
 ], ControllerOperator);
 
-let BaseCreep = class BaseCreep {
+class BaseCreep {
     constructor(creep) {
         //
     }
@@ -717,22 +706,24 @@ let BaseCreep = class BaseCreep {
         if (creepSpecificBodyPartCount !== creepSpecificBoostedBodyPartCount) {
             const mineralString = mineral.toString().toUpperCase();
             const labsWithMineral = Object.entries(creep.room.memory.monitoring.structures.labs).filter(([, labMonitorMemory]) => labMonitorMemory.resources[mineralString]);
-            if (labsWithMineral.length > 0) {
-                const labId = labsWithMineral[0][0];
-                const lab = Game.getObjectById(labId);
-                if (lab) {
-                    if (lab.store[RESOURCE_ENERGY] > LAB_ENERGY_CAPACITY / 10) {
-                        creep.memory.status = "fetchingBoosts";
-                        const boostResult = lab.boostCreep(creep);
-                        if (boostResult === ERR_NOT_IN_RANGE) {
-                            this.moveCreep(creep, lab.pos);
-                        }
-                        else {
-                            if (boostResult !== OK) {
-                                Log.Warning(`${creep.name} in ${creep.room.name} has encountered a ${boostResult} error code while trying to boost bodyparts with the mineral ${mineral}`);
+            if (!creep.spawning) {
+                if (labsWithMineral.length > 0) {
+                    const labId = labsWithMineral[0][0];
+                    const lab = Game.getObjectById(labId);
+                    if (lab) {
+                        if (lab.store[RESOURCE_ENERGY] > LAB_ENERGY_CAPACITY / 10) {
+                            creep.memory.status = "fetchingBoosts";
+                            const boostResult = lab.boostCreep(creep);
+                            if (boostResult === ERR_NOT_IN_RANGE) {
+                                this.moveCreep(creep, lab.pos);
                             }
                             else {
-                                creep.memory.status = "working";
+                                if (boostResult !== OK) {
+                                    Log.Warning(`${creep.name} in ${creep.room.name} has encountered a ${boostResult} error code while trying to boost bodyparts with the mineral ${mineral}`);
+                                }
+                                else {
+                                    creep.memory.status = "working";
+                                }
                             }
                         }
                     }
@@ -754,18 +745,13 @@ let BaseCreep = class BaseCreep {
                 creep.memory.status = "working";
             }
             else {
-                if (!creep.memory.safeRouteHome) {
-                    const safeRouteHome = findPath.findSafePathToRoom(creep.pos.roomName, creep.memory.room);
-                    if (safeRouteHome !== -2) {
-                        creep.memory.safeRouteHome = new RoomPosition(25, 25, safeRouteHome[0].room);
-                    }
-                }
-                if (creep.memory.safeRouteHome) {
-                    const moveResult = this.moveCreep(creep, creep.memory.safeRouteHome);
-                    if (moveResult !== OK) {
-                        Log.Warning(`${creep.memory.jobType} creep with UUID ${creep.name} returned ${moveResult} while moving home`);
-                    }
-                }
+                this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
+                // const safeRouteHome = findPath.findSafePathToRoom(creep.pos.roomName, creep.memory.room);
+                // if (safeRouteHome !== -2) {
+                //   this.moveCreep(creep, new RoomPosition(25, 25, safeRouteHome[0].room));
+                // } else {
+                //   Log.Warning(`${creep.memory.jobType} creep with UUID ${creep.name} returned ${safeRouteHome}`);
+                // }
             }
         }
     }
@@ -916,10 +902,7 @@ let BaseCreep = class BaseCreep {
         else
             return depositResult;
     }
-};
-BaseCreep = __decorate([
-    profile
-], BaseCreep);
+}
 
 let BuildConstructionSiteCreep = class BuildConstructionSiteCreep extends BaseCreep {
     constructor(creep) {
@@ -1322,8 +1305,9 @@ let ReserveRoomCreep = class ReserveRoomCreep extends BaseCreep {
                                     }
                                 }
                             }
-                            else
+                            else if (reserveResult !== OK) {
                                 Log.Warning(`Reserve Result for ${creep.name} in ${creep.pos.roomName}: ${reserveResult}`);
+                            }
                         }
                     }
                 }
@@ -1540,7 +1524,7 @@ UpgradeControllerCreep = __decorate([
     profile
 ], UpgradeControllerCreep);
 
-let CreepOperator = class CreepOperator {
+class CreepOperator {
     constructor() {
         this.runCreeps();
     }
@@ -1597,12 +1581,9 @@ let CreepOperator = class CreepOperator {
             }
         });
     }
-};
-CreepOperator = __decorate([
-    profile
-], CreepOperator);
+}
 
-let FactoryEngineerJob = class FactoryEngineerJob {
+class FactoryEngineerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -1650,10 +1631,7 @@ let FactoryEngineerJob = class FactoryEngineerJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-FactoryEngineerJob = __decorate([
-    profile
-], FactoryEngineerJob);
+}
 
 let FactoryOperator = class FactoryOperator {
     constructor() {
@@ -1736,7 +1714,7 @@ GameOperator = __decorate([
     profile
 ], GameOperator);
 
-let LabEngineerJob = class LabEngineerJob {
+class LabEngineerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -1783,10 +1761,7 @@ let LabEngineerJob = class LabEngineerJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-LabEngineerJob = __decorate([
-    profile
-], LabEngineerJob);
+}
 
 const labConfiguration = {
     W56N12: {
@@ -1891,7 +1866,7 @@ LabOperator = __decorate([
     profile
 ], LabOperator);
 
-let FeedLinkJob = class FeedLinkJob {
+class FeedLinkJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -1938,10 +1913,7 @@ let FeedLinkJob = class FeedLinkJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-FeedLinkJob = __decorate([
-    profile
-], FeedLinkJob);
+}
 
 let LinkOperator = class LinkOperator {
     constructor() {
@@ -4245,7 +4217,7 @@ SpawnQueueOperator = __decorate([
     profile
 ], SpawnQueueOperator);
 
-let QueueOperator = class QueueOperator {
+class QueueOperator {
     constructor() {
         this.runQueueOperators();
         this.runSpawnQueueOperator();
@@ -4259,12 +4231,9 @@ let QueueOperator = class QueueOperator {
     runSpawnQueueOperator() {
         new SpawnQueueOperator();
     }
-};
-QueueOperator = __decorate([
-    profile
-], QueueOperator);
+}
 
-let ClaimRoomJob = class ClaimRoomJob {
+class ClaimRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4311,12 +4280,9 @@ let ClaimRoomJob = class ClaimRoomJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-ClaimRoomJob = __decorate([
-    profile
-], ClaimRoomJob);
+}
 
-let ReserveRoomJob = class ReserveRoomJob {
+class ReserveRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4363,12 +4329,9 @@ let ReserveRoomJob = class ReserveRoomJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-ReserveRoomJob = __decorate([
-    profile
-], ReserveRoomJob);
+}
 
-let ScoutRoomJob = class ScoutRoomJob {
+class ScoutRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4415,10 +4378,7 @@ let ScoutRoomJob = class ScoutRoomJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-ScoutRoomJob = __decorate([
-    profile
-], ScoutRoomJob);
+}
 
 const roomsToClaim = [];
 
@@ -4512,7 +4472,7 @@ RoomOperator = __decorate([
     profile
 ], RoomOperator);
 
-let MineSourceJob = class MineSourceJob {
+class MineSourceJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4561,12 +4521,9 @@ let MineSourceJob = class MineSourceJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-MineSourceJob = __decorate([
-    profile
-], MineSourceJob);
+}
 
-let TransportResourceJob = class TransportResourceJob {
+class TransportResourceJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4615,10 +4572,7 @@ let TransportResourceJob = class TransportResourceJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-TransportResourceJob = __decorate([
-    profile
-], TransportResourceJob);
+}
 
 let SourceOperator = class SourceOperator {
     constructor() {
@@ -4681,7 +4635,7 @@ SourceOperator = __decorate([
     profile
 ], SourceOperator);
 
-let FeedSpawnJob = class FeedSpawnJob {
+class FeedSpawnJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4728,10 +4682,7 @@ let FeedSpawnJob = class FeedSpawnJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-FeedSpawnJob = __decorate([
-    profile
-], FeedSpawnJob);
+}
 
 let SpawnOperator = class SpawnOperator {
     constructor() {
@@ -4800,7 +4751,7 @@ SpawnOperator = __decorate([
     profile
 ], SpawnOperator);
 
-let TerminalEngineerJob = class TerminalEngineerJob {
+class TerminalEngineerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4848,10 +4799,7 @@ let TerminalEngineerJob = class TerminalEngineerJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-TerminalEngineerJob = __decorate([
-    profile
-], TerminalEngineerJob);
+}
 
 let TerminalOperator = class TerminalOperator {
     constructor() {
@@ -4915,7 +4863,7 @@ TerminalOperator = __decorate([
     profile
 ], TerminalOperator);
 
-let FeedTowerJob = class FeedTowerJob {
+class FeedTowerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4962,10 +4910,7 @@ let FeedTowerJob = class FeedTowerJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-FeedTowerJob = __decorate([
-    profile
-], FeedTowerJob);
+}
 
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -5072,7 +5017,7 @@ TowerOperator = __decorate([
     profile
 ], TowerOperator);
 
-let Operator = class Operator {
+class Operator {
     constructor() {
         this.runOperators();
     }
@@ -5131,10 +5076,7 @@ let Operator = class Operator {
     runFactoryOperator() {
         new FactoryOperator();
     }
-};
-Operator = __decorate([
-    profile
-], Operator);
+}
 
 const garbageCollect = {
     creeps() {
@@ -5172,7 +5114,7 @@ ConstructionSiteMonitor = __decorate([
     profile
 ], ConstructionSiteMonitor);
 
-let LootResourceJob = class LootResourceJob {
+class LootResourceJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -5218,10 +5160,7 @@ let LootResourceJob = class LootResourceJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-};
-LootResourceJob = __decorate([
-    profile
-], LootResourceJob);
+}
 
 let DroppedResourceMonitor = class DroppedResourceMonitor {
     constructor(room) {
@@ -5748,7 +5687,7 @@ TowerMonitor = __decorate([
     profile
 ], TowerMonitor);
 
-let StructureMonitor = class StructureMonitor {
+class StructureMonitor {
     constructor(room) {
         this.room = room;
         this.monitorStructures();
@@ -5798,12 +5737,9 @@ let StructureMonitor = class StructureMonitor {
             });
         }
     }
-};
-StructureMonitor = __decorate([
-    profile
-], StructureMonitor);
+}
 
-let RoomMonitor = class RoomMonitor {
+class RoomMonitor {
     constructor(RoomName) {
         this.roomName = RoomName;
         this.room = Game.rooms[RoomName];
@@ -5847,12 +5783,9 @@ let RoomMonitor = class RoomMonitor {
     runConstructionSiteMonitors() {
         new ConstructionSiteMonitor(this.room);
     }
-};
-RoomMonitor = __decorate([
-    profile
-], RoomMonitor);
+}
 
-let Monitor = class Monitor {
+class Monitor {
     constructor() {
         this.monitorRooms();
     }
@@ -5862,12 +5795,9 @@ let Monitor = class Monitor {
             new RoomMonitor(roomName);
         });
     }
-};
-Monitor = __decorate([
-    profile
-], Monitor);
+}
 
-let QueueMemoryController = class QueueMemoryController {
+class QueueMemoryController {
     constructor() {
         this.maintainQueueMemoryHealth();
     }
@@ -5900,14 +5830,11 @@ let QueueMemoryController = class QueueMemoryController {
     initializeJobQueueMemory() {
         Memory.queues.jobQueue = {};
     }
-};
-QueueMemoryController = __decorate([
-    profile
-], QueueMemoryController);
+}
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-let RoomMemoryController = class RoomMemoryController {
+class RoomMemoryController {
     constructor(roomName) {
         const roomMemorySchematic = {
             monitoring: {
@@ -5987,12 +5914,9 @@ let RoomMemoryController = class RoomMemoryController {
             });
         }
     }
-};
-RoomMemoryController = __decorate([
-    profile
-], RoomMemoryController);
+}
 
-let MemoryController = class MemoryController {
+class MemoryController {
     constructor() {
         this.maintainMemory();
     }
@@ -6012,10 +5936,7 @@ let MemoryController = class MemoryController {
             new RoomMemoryController(roomName);
         });
     }
-};
-MemoryController = __decorate([
-    profile
-], MemoryController);
+}
 
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 global.Profiler = init();

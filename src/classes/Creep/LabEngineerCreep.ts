@@ -1,5 +1,5 @@
-import { profile } from "Profiler";
 import { BaseCreep } from "classes/BaseCreep";
+import { profile } from "Profiler";
 import { Log } from "classes/Log";
 
 @profile

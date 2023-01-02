@@ -1,9 +1,7 @@
-import { profile } from "Profiler";
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { findPath } from "common/findPath";
 import { Log } from "./Log";
 
-@profile
 export class BaseCreep {
   public constructor(creep: Creep) {
     //
@@ -50,22 +48,24 @@ export class BaseCreep {
       const labsWithMineral = Object.entries(creep.room.memory.monitoring.structures.labs).filter(
         ([, labMonitorMemory]) => labMonitorMemory.resources[mineralString]
       );
-      if (labsWithMineral.length > 0) {
-        const labId = labsWithMineral[0][0] as Id<StructureLab>;
-        const lab = Game.getObjectById(labId);
-        if (lab) {
-          if (lab.store[RESOURCE_ENERGY] > LAB_ENERGY_CAPACITY / 10) {
-            creep.memory.status = "fetchingBoosts";
-            const boostResult = lab.boostCreep(creep);
-            if (boostResult === ERR_NOT_IN_RANGE) {
-              this.moveCreep(creep, lab.pos);
-            } else {
-              if (boostResult !== OK) {
-                Log.Warning(
-                  `${creep.name} in ${creep.room.name} has encountered a ${boostResult} error code while trying to boost bodyparts with the mineral ${mineral}`
-                );
+      if (!creep.spawning) {
+        if (labsWithMineral.length > 0) {
+          const labId = labsWithMineral[0][0] as Id<StructureLab>;
+          const lab = Game.getObjectById(labId);
+          if (lab) {
+            if (lab.store[RESOURCE_ENERGY] > LAB_ENERGY_CAPACITY / 10) {
+              creep.memory.status = "fetchingBoosts";
+              const boostResult = lab.boostCreep(creep);
+              if (boostResult === ERR_NOT_IN_RANGE) {
+                this.moveCreep(creep, lab.pos);
               } else {
-                creep.memory.status = "working";
+                if (boostResult !== OK) {
+                  Log.Warning(
+                    `${creep.name} in ${creep.room.name} has encountered a ${boostResult} error code while trying to boost bodyparts with the mineral ${mineral}`
+                  );
+                } else {
+                  creep.memory.status = "working";
+                }
               }
             }
           }
@@ -85,20 +85,13 @@ export class BaseCreep {
       if (creep.pos.roomName === creep.memory.room) {
         creep.memory.status = "working";
       } else {
-        if (!creep.memory.safeRouteHome) {
-          const safeRouteHome = findPath.findSafePathToRoom(creep.pos.roomName, creep.memory.room);
-          if (safeRouteHome !== -2) {
-            creep.memory.safeRouteHome = new RoomPosition(25, 25, safeRouteHome[0].room);
-          }
-        }
-        if (creep.memory.safeRouteHome) {
-          const moveResult = this.moveCreep(creep, creep.memory.safeRouteHome);
-          if (moveResult !== OK) {
-            Log.Warning(
-              `${creep.memory.jobType} creep with UUID ${creep.name} returned ${moveResult} while moving home`
-            );
-          }
-        }
+        this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
+        // const safeRouteHome = findPath.findSafePathToRoom(creep.pos.roomName, creep.memory.room);
+        // if (safeRouteHome !== -2) {
+        //   this.moveCreep(creep, new RoomPosition(25, 25, safeRouteHome[0].room));
+        // } else {
+        //   Log.Warning(`${creep.memory.jobType} creep with UUID ${creep.name} returned ${safeRouteHome}`);
+        // }
       }
     }
   }

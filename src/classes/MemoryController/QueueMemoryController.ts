@@ -1,5 +1,3 @@
-import { profile } from "Profiler";
-@profile
 export class QueueMemoryController {
   public constructor() {
     this.maintainQueueMemoryHealth();

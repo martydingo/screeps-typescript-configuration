@@ -1,8 +1,6 @@
-import { profile } from "Profiler";
 import { Log } from "classes/Log";
 import { base64 } from "common/utilities/base64";
 
-@profile
 export class FeedLinkJob {
   public JobParameters: FeedLinkJobParameters;
   public constructor(JobParameters: FeedLinkJobParameters, count = 1) {

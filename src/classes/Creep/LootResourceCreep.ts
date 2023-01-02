@@ -1,5 +1,5 @@
-import { profile } from "Profiler";
 import { BaseCreep } from "classes/BaseCreep";
+import { profile } from "Profiler";
 
 @profile
 export class LootResourceCreep extends BaseCreep {

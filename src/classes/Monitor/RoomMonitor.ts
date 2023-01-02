@@ -1,4 +1,3 @@
-import { profile } from "Profiler";
 import { ConstructionSiteMonitor } from "./RoomMonitor/ConstructionSiteMonitor";
 import { DroppedResourceMonitor } from "./RoomMonitor/DroppedResourceMonitor";
 import { EnergyMonitor } from "./RoomMonitor/EnergyMonitor";
@@ -10,7 +9,6 @@ import { StructureMonitor } from "./RoomMonitor/StructureMonitor";
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface RoomMonitor extends SourceMonitor {}
 
-@profile
 export class RoomMonitor {
   public roomName: string;
   public room: Room;
