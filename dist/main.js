@@ -1,8 +1,220 @@
 'use strict';
 
+const __PROFILER_ENABLED__ = true
+
 Object.defineProperty(exports, '__esModule', { value: true });
 
-class GameMonitor {
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+
+function __decorate(decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+}
+
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/ban-types */
+/* eslint-disable @typescript-eslint/restrict-plus-operands */
+/* tslint:disable:ban-types */
+function init() {
+    const defaults = {
+        data: {},
+        total: 0
+    };
+    if (!Memory.profiler) {
+        Memory.profiler = defaults;
+    }
+    const cli = {
+        clear() {
+            const running = isEnabled();
+            Memory.profiler = defaults;
+            if (running) {
+                Memory.profiler.start = Game.time;
+            }
+            return "Profiler Memory cleared";
+        },
+        output() {
+            outputProfilerData();
+            return "Done";
+        },
+        start() {
+            Memory.profiler.start = Game.time;
+            return "Profiler started";
+        },
+        status() {
+            if (isEnabled()) {
+                return "Profiler is running";
+            }
+            return "Profiler is stopped";
+        },
+        stop() {
+            if (!isEnabled()) {
+                return;
+            }
+            const timeRunning = Game.time - Memory.profiler.start;
+            Memory.profiler.total += timeRunning;
+            delete Memory.profiler.start;
+            return "Profiler stopped";
+        },
+        toString() {
+            return ("Profiler.start() - Starts the profiler\n" +
+                "Profiler.stop() - Stops/Pauses the profiler\n" +
+                "Profiler.status() - Returns whether is profiler is currently running or not\n" +
+                "Profiler.output() - Pretty-prints the collected profiler data to the console\n" +
+                this.status());
+        }
+    };
+    return cli;
+}
+function wrapFunction(obj, key, className) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(obj, key);
+    if (!descriptor || descriptor.get || descriptor.set) {
+        return;
+    }
+    if (key === "constructor") {
+        return;
+    }
+    const originalFunction = descriptor.value;
+    if (!originalFunction || typeof originalFunction !== "function") {
+        return;
+    }
+    // set a key for the object in memory
+    if (!className) {
+        className = obj.constructor ? `${obj.constructor.name}` : "";
+    }
+    const memKey = className + `:${key}`;
+    // set a tag so we don't wrap a function twice
+    const savedName = `__${key}__`;
+    if (Reflect.has(obj, savedName)) {
+        return;
+    }
+    Reflect.set(obj, savedName, originalFunction);
+    // /////////
+    Reflect.set(obj, key, function (...args) {
+        if (isEnabled()) {
+            const start = Game.cpu.getUsed();
+            const result = originalFunction.apply(this, args);
+            const end = Game.cpu.getUsed();
+            record(memKey, end - start);
+            return result;
+        }
+        return originalFunction.apply(this, args);
+    });
+}
+function profile(target, key, _descriptor) {
+    if (!__PROFILER_ENABLED__) {
+        return;
+    }
+    if (key) {
+        // case of method decorator
+        wrapFunction(target, key);
+        return;
+    }
+    // case of class decorator
+    const ctor = target;
+    if (!ctor.prototype) {
+        return;
+    }
+    const className = ctor.name;
+    Reflect.ownKeys(ctor.prototype).forEach(k => {
+        wrapFunction(ctor.prototype, k, className);
+    });
+}
+function isEnabled() {
+    return Memory.profiler.start !== undefined;
+}
+function record(key, time) {
+    if (!Memory.profiler.data[key]) {
+        Memory.profiler.data[key] = {
+            calls: 0,
+            time: 0
+        };
+    }
+    Memory.profiler.data[key].calls++;
+    Memory.profiler.data[key].time += time;
+}
+function outputProfilerData() {
+    let totalTicks = Memory.profiler.total;
+    if (Memory.profiler.start) {
+        totalTicks += Game.time - Memory.profiler.start;
+    }
+    // /////
+    // Process data
+    let totalCpu = 0; // running count of average total CPU use per tick
+    let calls;
+    let time;
+    let result;
+    const data = Reflect.ownKeys(Memory.profiler.data).map(key => {
+        calls = Memory.profiler.data[key].calls;
+        time = Memory.profiler.data[key].time;
+        result = {};
+        result.name = `${key}`;
+        result.calls = calls;
+        result.cpuPerCall = time / calls;
+        result.callsPerTick = calls / totalTicks;
+        result.cpuPerTick = time / totalTicks;
+        totalCpu += result.cpuPerTick;
+        return result;
+    });
+    data.sort((lhs, rhs) => rhs.cpuPerTick - lhs.cpuPerTick);
+    // /////
+    // Format data
+    let output = "";
+    // get function name max length
+    const longestName = _.max(data, d => d.name.length).name.length + 2;
+    // // Header line
+    output += _.padRight("Function", longestName);
+    output += _.padLeft("Tot Calls", 12);
+    output += _.padLeft("CPU/Call", 12);
+    output += _.padLeft("Calls/Tick", 12);
+    output += _.padLeft("CPU/Tick", 12);
+    output += _.padLeft("% of Tot\n", 12);
+    // //  Data lines
+    data.forEach(d => {
+        output += _.padRight(`${d.name}`, longestName);
+        output += _.padLeft(`${d.calls}`, 12);
+        output += _.padLeft(`${d.cpuPerCall.toFixed(2)}ms`, 12);
+        output += _.padLeft(`${d.callsPerTick.toFixed(2)}`, 12);
+        output += _.padLeft(`${d.cpuPerTick.toFixed(2)}ms`, 12);
+        output += _.padLeft(`${((d.cpuPerTick / totalCpu) * 100).toFixed(0)} %\n`, 12);
+    });
+    // // Footer line
+    output += `${totalTicks} total ticks measured`;
+    output += `\t\t\t${totalCpu.toFixed(2)} average CPU profiled per tick`;
+    console.log(output);
+}
+// debugging
+// function printObject(obj: object) {
+//   const name = obj.constructor ? obj.constructor.name : (obj as any).name;
+//   console.log("  Keys of :", name, ":");
+//   Reflect.ownKeys(obj).forEach((k) => {
+//     try {
+//       console.log(`    ${k}: ${Reflect.get(obj, k)}`);
+//     } catch (e) {
+//       // nothing
+//     }
+//   });
+// }
+
+let GameMonitor = class GameMonitor {
     constructor() {
         this.monitorGame();
     }
@@ -26,34 +238,38 @@ class GameMonitor {
         }
         return curHeapSize;
     }
-}
+};
+GameMonitor = __decorate([
+    profile
+], GameMonitor);
 
-class Log {
+var Log_1;
+let Log = Log_1 = class Log {
     static Emergency(msg) {
-        console.log(Log.LogColor.Emergency + msg);
+        console.log(Log_1.LogColor.Emergency + msg);
     }
     static Alert(msg) {
-        console.log(Log.LogColor.Alert + msg);
+        console.log(Log_1.LogColor.Alert + msg);
     }
     static Critical(msg) {
-        console.log(Log.LogColor.Critical + msg);
+        console.log(Log_1.LogColor.Critical + msg);
     }
     static Error(msg) {
-        console.log(Log.LogColor.Error + msg);
+        console.log(Log_1.LogColor.Error + msg);
     }
     static Warning(msg) {
-        console.log(Log.LogColor.Warning + msg);
+        console.log(Log_1.LogColor.Warning + msg);
     }
     static Notice(msg) {
-        console.log(Log.LogColor.Notice + msg);
+        console.log(Log_1.LogColor.Notice + msg);
     }
     static Informational(msg) {
-        console.log(Log.LogColor.Informational + msg);
+        console.log(Log_1.LogColor.Informational + msg);
     }
     static Debug(msg) {
-        console.log(Log.LogColor.Debug + msg);
+        console.log(Log_1.LogColor.Debug + msg);
     }
-}
+};
 Log.LogColor = {
     Emergency: '<font color="#ff0000">',
     Alert: '<font color="#c00000">',
@@ -64,6 +280,9 @@ Log.LogColor = {
     Informational: '<font color="#aaaaaa">',
     Debug: '<font color="#666666">'
 };
+Log = Log_1 = __decorate([
+    profile
+], Log);
 
 /* eslint-disable no-bitwise */
 // Juszczak/base64-typescript-class.ts
@@ -148,7 +367,7 @@ class base64 {
 base64.PADCHAR = "=";
 base64.ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-class BuildConstructionSiteJob {
+let BuildConstructionSiteJob = class BuildConstructionSiteJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -196,7 +415,10 @@ class BuildConstructionSiteJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+BuildConstructionSiteJob = __decorate([
+    profile
+], BuildConstructionSiteJob);
 
 const roomsToAvoid = [];
 
@@ -297,7 +519,7 @@ const creepNumbers = {
     factoryEngineer: 1
 };
 
-class ConstructionSiteOperator {
+let ConstructionSiteOperator = class ConstructionSiteOperator {
     constructor() {
         this.operateConstructionSites();
     }
@@ -353,9 +575,12 @@ class ConstructionSiteOperator {
             }
         }
     }
-}
+};
+ConstructionSiteOperator = __decorate([
+    profile
+], ConstructionSiteOperator);
 
-class UpgradeControllerJob {
+let UpgradeControllerJob = class UpgradeControllerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -403,9 +628,12 @@ class UpgradeControllerJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+UpgradeControllerJob = __decorate([
+    profile
+], UpgradeControllerJob);
 
-class ControllerOperator {
+let ControllerOperator = class ControllerOperator {
     constructor() {
         this.operateController();
     }
@@ -439,10 +667,12 @@ class ControllerOperator {
             }
         }
     }
-}
+};
+ControllerOperator = __decorate([
+    profile
+], ControllerOperator);
 
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-class BaseCreep {
+let BaseCreep = class BaseCreep {
     constructor(creep) {
         //
     }
@@ -524,12 +754,17 @@ class BaseCreep {
                 creep.memory.status = "working";
             }
             else {
-                const safeRouteHome = findPath.findSafePathToRoom(creep.pos.roomName, creep.memory.room);
-                if (safeRouteHome !== -2) {
-                    this.moveCreep(creep, new RoomPosition(25, 25, safeRouteHome[0].room));
+                if (!creep.memory.safeRouteHome) {
+                    const safeRouteHome = findPath.findSafePathToRoom(creep.pos.roomName, creep.memory.room);
+                    if (safeRouteHome !== -2) {
+                        creep.memory.safeRouteHome = new RoomPosition(25, 25, safeRouteHome[0].room);
+                    }
                 }
-                else {
-                    Log.Warning(`${creep.memory.jobType} creep with UUID ${creep.name} returned ${safeRouteHome}`);
+                if (creep.memory.safeRouteHome) {
+                    const moveResult = this.moveCreep(creep, creep.memory.safeRouteHome);
+                    if (moveResult !== OK) {
+                        Log.Warning(`${creep.memory.jobType} creep with UUID ${creep.name} returned ${moveResult} while moving home`);
+                    }
                 }
             }
         }
@@ -681,9 +916,12 @@ class BaseCreep {
         else
             return depositResult;
     }
-}
+};
+BaseCreep = __decorate([
+    profile
+], BaseCreep);
 
-class BuildConstructionSiteCreep extends BaseCreep {
+let BuildConstructionSiteCreep = class BuildConstructionSiteCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -721,9 +959,12 @@ class BuildConstructionSiteCreep extends BaseCreep {
             return upgradeResult;
         }
     }
-}
+};
+BuildConstructionSiteCreep = __decorate([
+    profile
+], BuildConstructionSiteCreep);
 
-class ClaimRoomCreep extends BaseCreep {
+let ClaimRoomCreep = class ClaimRoomCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -762,9 +1003,12 @@ class ClaimRoomCreep extends BaseCreep {
             }
         }
     }
-}
+};
+ClaimRoomCreep = __decorate([
+    profile
+], ClaimRoomCreep);
 
-class FactoryEngineerCreep extends BaseCreep {
+let FactoryEngineerCreep = class FactoryEngineerCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -825,9 +1069,12 @@ class FactoryEngineerCreep extends BaseCreep {
             }
         }
     }
-}
+};
+FactoryEngineerCreep = __decorate([
+    profile
+], FactoryEngineerCreep);
 
-class FeedLinkCreep extends BaseCreep {
+let FeedLinkCreep = class FeedLinkCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -847,9 +1094,12 @@ class FeedLinkCreep extends BaseCreep {
             }
         }
     }
-}
+};
+FeedLinkCreep = __decorate([
+    profile
+], FeedLinkCreep);
 
-class FeedSpawnCreep extends BaseCreep {
+let FeedSpawnCreep = class FeedSpawnCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -890,9 +1140,12 @@ class FeedSpawnCreep extends BaseCreep {
             }
         }
     }
-}
+};
+FeedSpawnCreep = __decorate([
+    profile
+], FeedSpawnCreep);
 
-class FeedTowerCreep extends BaseCreep {
+let FeedTowerCreep = class FeedTowerCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -911,9 +1164,12 @@ class FeedTowerCreep extends BaseCreep {
             }
         }
     }
-}
+};
+FeedTowerCreep = __decorate([
+    profile
+], FeedTowerCreep);
 
-class LabEngineerCreep extends BaseCreep {
+let LabEngineerCreep = class LabEngineerCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -992,9 +1248,12 @@ class LabEngineerCreep extends BaseCreep {
             }
         }
     }
-}
+};
+LabEngineerCreep = __decorate([
+    profile
+], LabEngineerCreep);
 
-class LootResourceCreep extends BaseCreep {
+let LootResourceCreep = class LootResourceCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -1027,9 +1286,12 @@ class LootResourceCreep extends BaseCreep {
             }
         }
     }
-}
+};
+LootResourceCreep = __decorate([
+    profile
+], LootResourceCreep);
 
-class ReserveRoomCreep extends BaseCreep {
+let ReserveRoomCreep = class ReserveRoomCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -1068,9 +1330,12 @@ class ReserveRoomCreep extends BaseCreep {
             }
         }
     }
-}
+};
+ReserveRoomCreep = __decorate([
+    profile
+], ReserveRoomCreep);
 
-class ScoutRoomCreep extends BaseCreep {
+let ScoutRoomCreep = class ScoutRoomCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -1081,9 +1346,12 @@ class ScoutRoomCreep extends BaseCreep {
             this.moveCreep(creep, findPath.findClearTerrain(creep.memory.room));
         }
     }
-}
+};
+ScoutRoomCreep = __decorate([
+    profile
+], ScoutRoomCreep);
 
-class SourceMinerCreep extends BaseCreep {
+let SourceMinerCreep = class SourceMinerCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -1121,9 +1389,12 @@ class SourceMinerCreep extends BaseCreep {
             }
         }
     }
-}
+};
+SourceMinerCreep = __decorate([
+    profile
+], SourceMinerCreep);
 
-class TerminalEngineerCreep extends BaseCreep {
+let TerminalEngineerCreep = class TerminalEngineerCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -1180,9 +1451,12 @@ class TerminalEngineerCreep extends BaseCreep {
             }
         }
     }
-}
+};
+TerminalEngineerCreep = __decorate([
+    profile
+], TerminalEngineerCreep);
 
-class TransportResourceCreep extends BaseCreep {
+let TransportResourceCreep = class TransportResourceCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -1223,9 +1497,12 @@ class TransportResourceCreep extends BaseCreep {
             }
         }
     }
-}
+};
+TransportResourceCreep = __decorate([
+    profile
+], TransportResourceCreep);
 
-class UpgradeControllerCreep extends BaseCreep {
+let UpgradeControllerCreep = class UpgradeControllerCreep extends BaseCreep {
     constructor(creep) {
         super(creep);
         this.runCreep(creep);
@@ -1258,9 +1535,12 @@ class UpgradeControllerCreep extends BaseCreep {
             return upgradeResult;
         }
     }
-}
+};
+UpgradeControllerCreep = __decorate([
+    profile
+], UpgradeControllerCreep);
 
-class CreepOperator {
+let CreepOperator = class CreepOperator {
     constructor() {
         this.runCreeps();
     }
@@ -1317,9 +1597,12 @@ class CreepOperator {
             }
         });
     }
-}
+};
+CreepOperator = __decorate([
+    profile
+], CreepOperator);
 
-class FactoryEngineerJob {
+let FactoryEngineerJob = class FactoryEngineerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -1367,9 +1650,12 @@ class FactoryEngineerJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+FactoryEngineerJob = __decorate([
+    profile
+], FactoryEngineerJob);
 
-class FactoryOperator {
+let FactoryOperator = class FactoryOperator {
     constructor() {
         if (Memory.rooms) {
             Object.entries(Memory.rooms).forEach(([roomName]) => {
@@ -1429,9 +1715,12 @@ class FactoryOperator {
             new FactoryEngineerJob(jobParameters, count);
         }
     }
-}
+};
+FactoryOperator = __decorate([
+    profile
+], FactoryOperator);
 
-class GameOperator {
+let GameOperator = class GameOperator {
     constructor() {
         this.generatePixel();
     }
@@ -1442,9 +1731,12 @@ class GameOperator {
             }
         }
     }
-}
+};
+GameOperator = __decorate([
+    profile
+], GameOperator);
 
-class LabEngineerJob {
+let LabEngineerJob = class LabEngineerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -1491,7 +1783,10 @@ class LabEngineerJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+LabEngineerJob = __decorate([
+    profile
+], LabEngineerJob);
 
 const labConfiguration = {
     W56N12: {
@@ -1499,7 +1794,7 @@ const labConfiguration = {
     }
 };
 
-class LabOperator {
+let LabOperator = class LabOperator {
     constructor() {
         if (Memory.rooms) {
             Object.entries(Memory.rooms).forEach(([roomName]) => {
@@ -1591,9 +1886,12 @@ class LabOperator {
             new LabEngineerJob(jobParameters, count);
         }
     }
-}
+};
+LabOperator = __decorate([
+    profile
+], LabOperator);
 
-class FeedLinkJob {
+let FeedLinkJob = class FeedLinkJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -1640,10 +1938,12 @@ class FeedLinkJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+FeedLinkJob = __decorate([
+    profile
+], FeedLinkJob);
 
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-class LinkOperator {
+let LinkOperator = class LinkOperator {
     constructor() {
         this.operateLinks();
     }
@@ -1690,7 +1990,10 @@ class LinkOperator {
         const count = creepNumbers[jobParameters.jobType];
         new FeedLinkJob(jobParameters, count);
     }
-}
+};
+LinkOperator = __decorate([
+    profile
+], LinkOperator);
 
 const creepBodyParts = {
     // First level of nesting, calculated by energyCapacityAvailable, grouped by their RCL maximums.
@@ -3792,7 +4095,7 @@ function fetchBodyParts(creepType, roomName) {
     return [];
 }
 
-class JobQueueOperator {
+let JobQueueOperator = class JobQueueOperator {
     constructor() {
         this.processJobs();
     }
@@ -3852,7 +4155,10 @@ class JobQueueOperator {
             return false;
         }
     }
-}
+};
+JobQueueOperator = __decorate([
+    profile
+], JobQueueOperator);
 
 function creepPriority(room) {
     let priority = {
@@ -3912,7 +4218,7 @@ function creepPriority(room) {
     return priority;
 }
 
-class SpawnQueueOperator {
+let SpawnQueueOperator = class SpawnQueueOperator {
     constructor() {
         this.generateRoomSpawnQueues();
     }
@@ -3934,9 +4240,12 @@ class SpawnQueueOperator {
             });
         }
     }
-}
+};
+SpawnQueueOperator = __decorate([
+    profile
+], SpawnQueueOperator);
 
-class QueueOperator {
+let QueueOperator = class QueueOperator {
     constructor() {
         this.runQueueOperators();
         this.runSpawnQueueOperator();
@@ -3950,9 +4259,12 @@ class QueueOperator {
     runSpawnQueueOperator() {
         new SpawnQueueOperator();
     }
-}
+};
+QueueOperator = __decorate([
+    profile
+], QueueOperator);
 
-class ClaimRoomJob {
+let ClaimRoomJob = class ClaimRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -3999,9 +4311,12 @@ class ClaimRoomJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+ClaimRoomJob = __decorate([
+    profile
+], ClaimRoomJob);
 
-class ReserveRoomJob {
+let ReserveRoomJob = class ReserveRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4048,9 +4363,12 @@ class ReserveRoomJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+ReserveRoomJob = __decorate([
+    profile
+], ReserveRoomJob);
 
-class ScoutRoomJob {
+let ScoutRoomJob = class ScoutRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4097,7 +4415,10 @@ class ScoutRoomJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+ScoutRoomJob = __decorate([
+    profile
+], ScoutRoomJob);
 
 const roomsToClaim = [];
 
@@ -4127,7 +4448,7 @@ const roomOperations = {
     }
 };
 
-class RoomOperator {
+let RoomOperator = class RoomOperator {
     constructor() {
         const roomsToOperate = roomOperations.generateRoomsArray();
         //
@@ -4186,9 +4507,12 @@ class RoomOperator {
         };
         new ReserveRoomJob(jobParameters);
     }
-}
+};
+RoomOperator = __decorate([
+    profile
+], RoomOperator);
 
-class MineSourceJob {
+let MineSourceJob = class MineSourceJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4237,9 +4561,12 @@ class MineSourceJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+MineSourceJob = __decorate([
+    profile
+], MineSourceJob);
 
-class TransportResourceJob {
+let TransportResourceJob = class TransportResourceJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4288,9 +4615,12 @@ class TransportResourceJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+TransportResourceJob = __decorate([
+    profile
+], TransportResourceJob);
 
-class SourceOperator {
+let SourceOperator = class SourceOperator {
     constructor() {
         this.operateSources();
     }
@@ -4346,9 +4676,12 @@ class SourceOperator {
             Log.Alert(`TransportResource Job for source ${source.id} cannot find any storage nearby ${source.pos.roomName}!`);
         }
     }
-}
+};
+SourceOperator = __decorate([
+    profile
+], SourceOperator);
 
-class FeedSpawnJob {
+let FeedSpawnJob = class FeedSpawnJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4395,9 +4728,12 @@ class FeedSpawnJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+FeedSpawnJob = __decorate([
+    profile
+], FeedSpawnJob);
 
-class SpawnOperator {
+let SpawnOperator = class SpawnOperator {
     constructor() {
         this.createSpawnFeederJobs();
         Object.entries(Game.rooms).forEach(([roomName]) => {
@@ -4459,9 +4795,12 @@ class SpawnOperator {
             new FeedSpawnJob(JobParameters, count);
         });
     }
-}
+};
+SpawnOperator = __decorate([
+    profile
+], SpawnOperator);
 
-class TerminalEngineerJob {
+let TerminalEngineerJob = class TerminalEngineerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4509,9 +4848,12 @@ class TerminalEngineerJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+TerminalEngineerJob = __decorate([
+    profile
+], TerminalEngineerJob);
 
-class TerminalOperator {
+let TerminalOperator = class TerminalOperator {
     constructor() {
         if (Memory.rooms) {
             Object.entries(Memory.rooms).forEach(([roomName]) => {
@@ -4568,9 +4910,12 @@ class TerminalOperator {
             new TerminalEngineerJob(jobParameters, count);
         }
     }
-}
+};
+TerminalOperator = __decorate([
+    profile
+], TerminalOperator);
 
-class FeedTowerJob {
+let FeedTowerJob = class FeedTowerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4617,7 +4962,10 @@ class FeedTowerJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+FeedTowerJob = __decorate([
+    profile
+], FeedTowerJob);
 
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -4658,7 +5006,7 @@ function fetchHostileCreep(room) {
     return undefined;
 }
 
-class TowerOperator {
+let TowerOperator = class TowerOperator {
     constructor() {
         if (Memory.rooms) {
             Object.entries(Memory.rooms).forEach(([roomName]) => {
@@ -4719,9 +5067,12 @@ class TowerOperator {
             }
         }
     }
-}
+};
+TowerOperator = __decorate([
+    profile
+], TowerOperator);
 
-class Operator {
+let Operator = class Operator {
     constructor() {
         this.runOperators();
     }
@@ -4780,7 +5131,10 @@ class Operator {
     runFactoryOperator() {
         new FactoryOperator();
     }
-}
+};
+Operator = __decorate([
+    profile
+], Operator);
 
 const garbageCollect = {
     creeps() {
@@ -4793,7 +5147,7 @@ const garbageCollect = {
     }
 };
 
-class ConstructionSiteMonitor {
+let ConstructionSiteMonitor = class ConstructionSiteMonitor {
     constructor(room) {
         this.room = room;
         this.initalizeConstructionSiteMonitorMemory();
@@ -4813,9 +5167,12 @@ class ConstructionSiteMonitor {
             };
         });
     }
-}
+};
+ConstructionSiteMonitor = __decorate([
+    profile
+], ConstructionSiteMonitor);
 
-class LootResourceJob {
+let LootResourceJob = class LootResourceJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
@@ -4861,9 +5218,12 @@ class LootResourceJob {
             delete Memory.queues.jobQueue[UUID];
         }
     }
-}
+};
+LootResourceJob = __decorate([
+    profile
+], LootResourceJob);
 
-class DroppedResourceMonitor {
+let DroppedResourceMonitor = class DroppedResourceMonitor {
     constructor(room) {
         this.room = room;
         if (this.room) {
@@ -4908,9 +5268,12 @@ class DroppedResourceMonitor {
             }
         }
     }
-}
+};
+DroppedResourceMonitor = __decorate([
+    profile
+], DroppedResourceMonitor);
 
-class EnergyMonitor {
+let EnergyMonitor = class EnergyMonitor {
     constructor(room) {
         this.room = room;
         if (this.room) {
@@ -4943,9 +5306,12 @@ class EnergyMonitor {
             }
         });
     }
-}
+};
+EnergyMonitor = __decorate([
+    profile
+], EnergyMonitor);
 
-class HostileMonitor {
+let HostileMonitor = class HostileMonitor {
     constructor(room) {
         this.room = room;
         this.initalizeHostileMonitorMemory();
@@ -4983,9 +5349,12 @@ class HostileMonitor {
             };
         });
     }
-}
+};
+HostileMonitor = __decorate([
+    profile
+], HostileMonitor);
 
-class MineralMonitor {
+let MineralMonitor = class MineralMonitor {
     constructor(mineralId) {
         this.mineralId = mineralId;
         this.monitorMineral();
@@ -5000,9 +5369,12 @@ class MineralMonitor {
             };
         }
     }
-}
+};
+MineralMonitor = __decorate([
+    profile
+], MineralMonitor);
 
-class SourceMonitor {
+let SourceMonitor = class SourceMonitor {
     constructor(sourceId) {
         this.sourceId = sourceId;
         this.monitorSource();
@@ -5017,9 +5389,12 @@ class SourceMonitor {
             };
         }
     }
-}
+};
+SourceMonitor = __decorate([
+    profile
+], SourceMonitor);
 
-class ContainerMonitor {
+let ContainerMonitor = class ContainerMonitor {
     constructor(container) {
         this.initalizeContainerMonitorMemory(container);
         this.monitorContainers(container);
@@ -5048,9 +5423,12 @@ class ContainerMonitor {
             }
         }
     }
-}
+};
+ContainerMonitor = __decorate([
+    profile
+], ContainerMonitor);
 
-class ControllerMonitor {
+let ControllerMonitor = class ControllerMonitor {
     constructor(controller) {
         this.monitorController(controller);
     }
@@ -5080,9 +5458,12 @@ class ControllerMonitor {
             room.memory.monitoring.structures.controller = controllerMonitorDictionary;
         }
     }
-}
+};
+ControllerMonitor = __decorate([
+    profile
+], ControllerMonitor);
 
-class ExtensionMonitor {
+let ExtensionMonitor = class ExtensionMonitor {
     constructor(extension) {
         this.initalizeExtensionMonitorMemory(extension);
         this.monitorExtensions(extension);
@@ -5100,9 +5481,12 @@ class ExtensionMonitor {
             };
         }
     }
-}
+};
+ExtensionMonitor = __decorate([
+    profile
+], ExtensionMonitor);
 
-class FactoryMonitor {
+let FactoryMonitor = class FactoryMonitor {
     constructor(factory) {
         this.monitorFactory(factory);
     }
@@ -5124,9 +5508,12 @@ class FactoryMonitor {
             };
         }
     }
-}
+};
+FactoryMonitor = __decorate([
+    profile
+], FactoryMonitor);
 
-class LabMonitor {
+let LabMonitor = class LabMonitor {
     constructor(lab) {
         this.initalizeLabMonitorMemory(lab);
         this.monitorLabs(lab);
@@ -5156,7 +5543,10 @@ class LabMonitor {
             }
         }
     }
-}
+};
+LabMonitor = __decorate([
+    profile
+], LabMonitor);
 
 const linkConfig = {
     W56N12: {
@@ -5166,7 +5556,7 @@ const linkConfig = {
     }
 };
 
-class LinkMonitor {
+let LinkMonitor = class LinkMonitor {
     constructor(link) {
         this.monitorLinks(link);
         this.initalizeLinkMonitorModes(link);
@@ -5206,9 +5596,12 @@ class LinkMonitor {
             }
         }
     }
-}
+};
+LinkMonitor = __decorate([
+    profile
+], LinkMonitor);
 
-class RoadMonitor {
+let RoadMonitor = class RoadMonitor {
     constructor(road) {
         this.initalizeRoadMonitorMemory(road);
         this.monitorRoads(road);
@@ -5228,9 +5621,12 @@ class RoadMonitor {
             };
         }
     }
-}
+};
+RoadMonitor = __decorate([
+    profile
+], RoadMonitor);
 
-class SpawnMonitor {
+let SpawnMonitor = class SpawnMonitor {
     // SpawnMonitor Interface
     constructor(spawn) {
         this.initializeSpawnMonitorMemory(spawn);
@@ -5260,9 +5656,12 @@ class SpawnMonitor {
             };
         }
     }
-}
+};
+SpawnMonitor = __decorate([
+    profile
+], SpawnMonitor);
 
-class StorageMonitor {
+let StorageMonitor = class StorageMonitor {
     constructor(storage) {
         this.monitorStorage(storage);
     }
@@ -5287,9 +5686,12 @@ class StorageMonitor {
             });
         }
     }
-}
+};
+StorageMonitor = __decorate([
+    profile
+], StorageMonitor);
 
-class TerminalMonitor {
+let TerminalMonitor = class TerminalMonitor {
     constructor(terminal) {
         this.monitorTerminal(terminal);
     }
@@ -5310,9 +5712,12 @@ class TerminalMonitor {
             };
         }
     }
-}
+};
+TerminalMonitor = __decorate([
+    profile
+], TerminalMonitor);
 
-class TowerMonitor {
+let TowerMonitor = class TowerMonitor {
     constructor(tower) {
         this.initalizeTowerMonitorMemory(tower);
         this.monitorTower(tower);
@@ -5338,9 +5743,12 @@ class TowerMonitor {
             }
         }
     }
-}
+};
+TowerMonitor = __decorate([
+    profile
+], TowerMonitor);
 
-class StructureMonitor {
+let StructureMonitor = class StructureMonitor {
     constructor(room) {
         this.room = room;
         this.monitorStructures();
@@ -5390,9 +5798,12 @@ class StructureMonitor {
             });
         }
     }
-}
+};
+StructureMonitor = __decorate([
+    profile
+], StructureMonitor);
 
-class RoomMonitor {
+let RoomMonitor = class RoomMonitor {
     constructor(RoomName) {
         this.roomName = RoomName;
         this.room = Game.rooms[RoomName];
@@ -5436,9 +5847,12 @@ class RoomMonitor {
     runConstructionSiteMonitors() {
         new ConstructionSiteMonitor(this.room);
     }
-}
+};
+RoomMonitor = __decorate([
+    profile
+], RoomMonitor);
 
-class Monitor {
+let Monitor = class Monitor {
     constructor() {
         this.monitorRooms();
     }
@@ -5448,9 +5862,12 @@ class Monitor {
             new RoomMonitor(roomName);
         });
     }
-}
+};
+Monitor = __decorate([
+    profile
+], Monitor);
 
-class QueueMemoryController {
+let QueueMemoryController = class QueueMemoryController {
     constructor() {
         this.maintainQueueMemoryHealth();
     }
@@ -5483,11 +5900,14 @@ class QueueMemoryController {
     initializeJobQueueMemory() {
         Memory.queues.jobQueue = {};
     }
-}
+};
+QueueMemoryController = __decorate([
+    profile
+], QueueMemoryController);
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-class RoomMemoryController {
+let RoomMemoryController = class RoomMemoryController {
     constructor(roomName) {
         const roomMemorySchematic = {
             monitoring: {
@@ -5567,9 +5987,12 @@ class RoomMemoryController {
             });
         }
     }
-}
+};
+RoomMemoryController = __decorate([
+    profile
+], RoomMemoryController);
 
-class MemoryController {
+let MemoryController = class MemoryController {
     constructor() {
         this.maintainMemory();
     }
@@ -5589,10 +6012,13 @@ class MemoryController {
             new RoomMemoryController(roomName);
         });
     }
-}
+};
+MemoryController = __decorate([
+    profile
+], MemoryController);
 
-// When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
-// This utility uses source maps to get the line numbers and file names of the original, TS source code
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+global.Profiler = init();
 const loop = () => {
     Log.Informational(`Current game tick is ${Game.time}`);
     garbageCollect.creeps();

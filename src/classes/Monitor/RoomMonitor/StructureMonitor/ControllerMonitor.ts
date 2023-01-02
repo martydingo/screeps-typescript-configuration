@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class ControllerMonitor {
   public constructor(controller: StructureController) {
     this.monitorController(controller);

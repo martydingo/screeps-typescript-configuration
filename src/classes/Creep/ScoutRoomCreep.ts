@@ -1,6 +1,8 @@
+import { profile } from "Profiler";
 import { BaseCreep } from "classes/BaseCreep";
 import { findPath } from "common/findPath";
 
+@profile
 export class ScoutRoomCreep extends BaseCreep {
   public constructor(creep: Creep) {
     super(creep);

@@ -1,6 +1,8 @@
+import { profile } from "Profiler";
 import { LootResourceJob } from "classes/Job/LootResourceJob";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 
+@profile
 export class DroppedResourceMonitor {
   private room: Room;
   public constructor(room: Room) {

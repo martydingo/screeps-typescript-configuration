@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class GameMonitor {
   public constructor() {
     this.monitorGame();

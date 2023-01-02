@@ -1,3 +1,4 @@
+import { profile } from "Profiler";
 import { BuildConstructionSiteCreep } from "classes/Creep/BuildConstructionSiteCreep";
 import { ClaimRoomCreep } from "classes/Creep/ClaimRoomCreep";
 import { FactoryEngineerCreep } from "classes/Creep/FactoryEngineerCreep";
@@ -14,6 +15,7 @@ import { TransportResourceCreep } from "classes/Creep/TransportResourceCreep";
 import { UpgradeControllerCreep } from "classes/Creep/UpgradeControllerCreep";
 import { Log } from "classes/Log";
 
+@profile
 export class CreepOperator {
   public constructor() {
     this.runCreeps();

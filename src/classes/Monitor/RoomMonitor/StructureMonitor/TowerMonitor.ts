@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class TowerMonitor {
   public constructor(tower: StructureTower) {
     this.initalizeTowerMonitorMemory(tower);

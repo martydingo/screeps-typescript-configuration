@@ -1,3 +1,4 @@
+import { profile } from "Profiler";
 import { MineSourceJob } from "classes/Job/MineSourceJob";
 import { TransportResourceJob } from "classes/Job/TransportResourceJob";
 import { Log } from "classes/Log";
@@ -6,6 +7,7 @@ import { creepNumbers } from "configuration/creeps/creepNumbers";
 import { roomsToMine } from "configuration/rooms/roomsToMine";
 import { myScreepsUsername } from "configuration/user";
 
+@profile
 export class SourceOperator {
   public constructor() {
     this.operateSources();

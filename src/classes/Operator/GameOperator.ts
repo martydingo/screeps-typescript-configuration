@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class GameOperator {
   public constructor() {
     this.generatePixel();

@@ -1,3 +1,4 @@
+import { profile } from "Profiler";
 import { ClaimRoomJob } from "classes/Job/ClaimRoomJob";
 import { ReserveRoomJob } from "classes/Job/ReserveRoomJob";
 import { RoomMonitor } from "classes/Monitor/RoomMonitor";
@@ -8,6 +9,7 @@ import { roomsToClaim } from "configuration/rooms/roomsToClaim";
 import { roomsToMine } from "configuration/rooms/roomsToMine";
 import { roomOperations } from "common/roomOperations";
 
+@profile
 export class RoomOperator {
   public constructor() {
     const roomsToOperate: string[] = roomOperations.generateRoomsArray();

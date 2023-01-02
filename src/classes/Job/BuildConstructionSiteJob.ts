@@ -1,6 +1,8 @@
+import { profile } from "Profiler";
 import { Log } from "classes/Log";
 import { base64 } from "common/utilities/base64";
 
+@profile
 export class BuildConstructionSiteJob {
   public JobParameters: BuildConstructionSiteJobParameters;
   public constructor(JobParameters: BuildConstructionSiteJobParameters, count = 1) {

@@ -1,7 +1,9 @@
+import { profile } from "Profiler";
 import { FactoryEngineerJob } from "classes/Job/FactoryEngineerJob";
 import { base64 } from "common/utilities/base64";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 
+@profile
 export class FactoryOperator {
   public constructor() {
     if (Memory.rooms) {

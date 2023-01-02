@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class WallMonitor {
   public constructor(wall: StructureWall) {
     this.initalizeWallMonitorMemory(wall);

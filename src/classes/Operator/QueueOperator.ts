@@ -1,6 +1,8 @@
+import { profile } from "Profiler";
 import { JobQueueOperator } from "./QueueOperator/JobQueueOperator";
 import { SpawnQueueOperator } from "./QueueOperator/SpawnQueueOperator";
 
+@profile
 export class QueueOperator {
   public constructor() {
     this.runQueueOperators();

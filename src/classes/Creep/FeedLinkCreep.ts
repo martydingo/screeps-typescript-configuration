@@ -1,5 +1,7 @@
+import { profile } from "Profiler";
 import { BaseCreep } from "classes/BaseCreep";
 
+@profile
 export class FeedLinkCreep extends BaseCreep {
   public constructor(creep: Creep) {
     super(creep);

@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class StorageMonitor {
   public constructor(storage: StructureStorage) {
     this.monitorStorage(storage);

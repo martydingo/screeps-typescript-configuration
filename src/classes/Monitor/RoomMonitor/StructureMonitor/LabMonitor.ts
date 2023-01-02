@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class LabMonitor {
   public constructor(lab: StructureLab) {
     this.initalizeLabMonitorMemory(lab);

@@ -1,5 +1,7 @@
+import { profile } from "Profiler";
 import { linkConfig } from "configuration/rooms/links/linkConfig";
 
+@profile
 export class LinkMonitor {
   public constructor(link: StructureLink) {
     this.monitorLinks(link);

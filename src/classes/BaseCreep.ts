@@ -1,7 +1,9 @@
+import { profile } from "Profiler";
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { findPath } from "common/findPath";
 import { Log } from "./Log";
 
+@profile
 export class BaseCreep {
   public constructor(creep: Creep) {
     //
@@ -83,11 +85,19 @@ export class BaseCreep {
       if (creep.pos.roomName === creep.memory.room) {
         creep.memory.status = "working";
       } else {
-        const safeRouteHome = findPath.findSafePathToRoom(creep.pos.roomName, creep.memory.room);
-        if (safeRouteHome !== -2) {
-          this.moveCreep(creep, new RoomPosition(25, 25, safeRouteHome[0].room));
-        } else {
-          Log.Warning(`${creep.memory.jobType} creep with UUID ${creep.name} returned ${safeRouteHome}`);
+        if (!creep.memory.safeRouteHome) {
+          const safeRouteHome = findPath.findSafePathToRoom(creep.pos.roomName, creep.memory.room);
+          if (safeRouteHome !== -2) {
+            creep.memory.safeRouteHome = new RoomPosition(25, 25, safeRouteHome[0].room);
+          }
+        }
+        if (creep.memory.safeRouteHome) {
+          const moveResult = this.moveCreep(creep, creep.memory.safeRouteHome);
+          if (moveResult !== OK) {
+            Log.Warning(
+              `${creep.memory.jobType} creep with UUID ${creep.name} returned ${moveResult} while moving home`
+            );
+          }
         }
       }
     }

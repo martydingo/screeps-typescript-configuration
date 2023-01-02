@@ -1,3 +1,4 @@
+import { profile } from "Profiler";
 import { ConstructionSiteOperator } from "./Operator/ConstructionSiteOperator";
 import { ControllerOperator } from "./Operator/ControllerOperator";
 import { CreepOperator } from "./Operator/CreepOperator";
@@ -12,6 +13,7 @@ import { SpawnOperator } from "./Operator/SpawnOperator";
 import { TerminalOperator } from "./Operator/TerminalOperator";
 import { TowerOperator } from "./Operator/TowerOperator";
 
+@profile
 export class Operator {
   public constructor() {
     this.runOperators();

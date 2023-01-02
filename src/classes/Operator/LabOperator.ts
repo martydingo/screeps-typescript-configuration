@@ -1,8 +1,10 @@
+import { profile } from "Profiler";
 import { LabEngineerJob } from "classes/Job/LabEngineerJob";
 import { base64 } from "common/utilities/base64";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 import { labConfiguration } from "configuration/rooms/labs/labConfiguration";
 
+@profile
 export class LabOperator {
   public constructor() {
     if (Memory.rooms) {

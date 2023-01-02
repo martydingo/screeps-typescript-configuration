@@ -1,7 +1,9 @@
+import { profile } from "Profiler";
 import { QueueMemoryController } from "./MemoryController/QueueMemoryController";
 import { RoomMemoryController } from "./MemoryController/RoomMemoryController";
 import { roomOperations } from "common/roomOperations";
 
+@profile
 export class MemoryController {
   public constructor() {
     this.maintainMemory();

@@ -1,12 +1,15 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable no-underscore-dangle */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { GameMonitor } from "classes/Monitor/GameMonitor";
 import { Log } from "classes/Log";
 import { Operator } from "classes/Operator";
 import { garbageCollect } from "common/utilities/garbageCollect";
 import { Monitor } from "classes/Monitor";
 import { MemoryController } from "classes/MemoryController";
+import * as Profiler from "Profiler";
 
-// When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
-// This utility uses source maps to get the line numbers and file names of the original, TS source code
+global.Profiler = Profiler.init();
 export const loop = () => {
   Log.Informational(`Current game tick is ${Game.time}`);
   garbageCollect.creeps();

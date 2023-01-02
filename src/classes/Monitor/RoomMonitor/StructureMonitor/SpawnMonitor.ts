@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class SpawnMonitor {
   // SpawnMonitor Interface
   public constructor(spawn: StructureSpawn) {

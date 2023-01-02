@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class ExtensionMonitor {
   public constructor(extension: StructureExtension) {
     this.initalizeExtensionMonitorMemory(extension);

@@ -1,6 +1,8 @@
+import { profile } from "Profiler";
 import { Log } from "classes/Log";
 import { base64 } from "common/utilities/base64";
 
+@profile
 export class TerminalEngineerJob {
   public JobParameters: TerminalEngineerJobParameters;
   public constructor(JobParameters: TerminalEngineerJobParameters, count = 1) {

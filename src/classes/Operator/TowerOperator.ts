@@ -1,6 +1,8 @@
+import { profile } from "Profiler";
 import { FeedTowerJob } from "classes/Job/FeedTowerJob";
 import { fetchHostileCreep } from "common/fetchHostileCreep";
 
+@profile
 export class TowerOperator {
   public constructor() {
     if (Memory.rooms) {

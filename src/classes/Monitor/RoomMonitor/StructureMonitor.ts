@@ -1,3 +1,4 @@
+import { profile } from "Profiler";
 import { ContainerMonitor } from "./StructureMonitor/ContainerMonitor";
 import { ControllerMonitor } from "./StructureMonitor/ControllerMonitor";
 import { ExtensionMonitor } from "./StructureMonitor/ExtensionMonitor";
@@ -10,6 +11,7 @@ import { StorageMonitor } from "./StructureMonitor/StorageMonitor";
 import { TerminalMonitor } from "./StructureMonitor/TerminalMonitor";
 import { TowerMonitor } from "./StructureMonitor/TowerMonitor";
 
+@profile
 export class StructureMonitor {
   private room: Room;
   public constructor(room: Room) {

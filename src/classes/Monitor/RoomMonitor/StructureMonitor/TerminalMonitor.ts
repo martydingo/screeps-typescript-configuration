@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class TerminalMonitor {
   public constructor(terminal: StructureTerminal) {
     this.monitorTerminal(terminal);

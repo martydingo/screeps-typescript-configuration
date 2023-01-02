@@ -1,7 +1,9 @@
+import { profile } from "Profiler";
 import { TerminalEngineerJob } from "classes/Job/TerminalEngineerJob";
 import { base64 } from "common/utilities/base64";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 
+@profile
 export class TerminalOperator {
   public constructor() {
     if (Memory.rooms) {

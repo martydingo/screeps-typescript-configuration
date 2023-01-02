@@ -1,5 +1,7 @@
+import { profile } from "Profiler";
 import { fetchBodyParts } from "common/fetchBodyParts";
 
+@profile
 export class JobQueueOperator {
   public constructor() {
     this.processJobs();

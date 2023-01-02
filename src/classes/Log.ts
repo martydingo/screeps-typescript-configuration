@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class Log {
   private static LogColor: LogColor = {
     Emergency: '<font color="#ff0000">',

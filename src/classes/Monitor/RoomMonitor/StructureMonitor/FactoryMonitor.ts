@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class FactoryMonitor {
   public constructor(factory: StructureFactory) {
     this.monitorFactory(factory);

@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class RoadMonitor {
   public constructor(road: StructureRoad) {
     this.initalizeRoadMonitorMemory(road);

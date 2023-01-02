@@ -1,7 +1,9 @@
+import { profile } from "Profiler";
 import { BuildConstructionSiteJob } from "classes/Job/BuildConstructionSiteJob";
 import { findPath } from "common/findPath";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 
+@profile
 export class ConstructionSiteOperator {
   public constructor() {
     this.operateConstructionSites();

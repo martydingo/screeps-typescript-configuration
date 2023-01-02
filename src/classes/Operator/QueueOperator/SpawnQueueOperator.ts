@@ -1,5 +1,7 @@
+import { profile } from "Profiler";
 import { creepPriority } from "configuration/creeps/creepPriority";
 
+@profile
 export class SpawnQueueOperator {
   public constructor() {
     this.generateRoomSpawnQueues();

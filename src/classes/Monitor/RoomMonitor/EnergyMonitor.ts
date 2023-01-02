@@ -1,3 +1,5 @@
+import { profile } from "Profiler";
+@profile
 export class EnergyMonitor {
   private room: Room;
   public constructor(room: Room) {

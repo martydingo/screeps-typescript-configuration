@@ -1,7 +1,9 @@
+import { profile } from "Profiler";
 import { UpgradeControllerJob } from "classes/Job/UpgradeControllerJob";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 import { findPath } from "common/findPath";
 
+@profile
 export class ControllerOperator {
   public constructor() {
     this.operateController();

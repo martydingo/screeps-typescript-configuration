@@ -1,9 +1,11 @@
+import { profile } from "Profiler";
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { FeedLinkJob } from "classes/Job/FeedLinkJob";
 import { Log } from "classes/Log";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 
+@profile
 export class LinkOperator {
   public constructor() {
     this.operateLinks();

@@ -1,8 +1,10 @@
+import { profile } from "Profiler";
 import { FeedSpawnJob } from "classes/Job/FeedSpawnJob";
 import { Log } from "classes/Log";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 import { creepPriority } from "configuration/creeps/creepPriority";
 
+@profile
 export class SpawnOperator {
   public constructor() {
     this.createSpawnFeederJobs();

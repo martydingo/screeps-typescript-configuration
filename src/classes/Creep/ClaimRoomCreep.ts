@@ -1,6 +1,8 @@
+import { profile } from "Profiler";
 import { BaseCreep } from "classes/BaseCreep";
 import { Log } from "classes/Log";
 
+@profile
 export class ClaimRoomCreep extends BaseCreep {
   public constructor(creep: Creep) {
     super(creep);

@@ -28,5 +28,6 @@ declare global {
     terminalJobUUID?: string;
     labJobUUID?: string;
     factoryJobUUID?: string;
+    safeRouteHome?: RoomPosition;
   }
 }
