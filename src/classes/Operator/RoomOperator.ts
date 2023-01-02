@@ -1,12 +1,9 @@
 import { profile } from "Profiler";
 import { ClaimRoomJob } from "classes/Job/ClaimRoomJob";
 import { ReserveRoomJob } from "classes/Job/ReserveRoomJob";
-import { RoomMonitor } from "classes/Monitor/RoomMonitor";
 import { ScoutRoomJob } from "classes/Job/ScoutRoomJob";
 import { findPath } from "common/findPath";
 import { myScreepsUsername } from "configuration/user";
-import { roomsToClaim } from "configuration/rooms/roomsToClaim";
-import { roomsToMine } from "configuration/rooms/roomsToMine";
 import { roomOperations } from "common/roomOperations";
 
 @profile

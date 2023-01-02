@@ -1,7 +1,7 @@
 export {};
 declare global {
-  interface WallMonitorMemory {
-    [wallId: Id<StructureWall>]: {
+  interface ExtractorMonitorMemory {
+    [extractorId: Id<StructureExtractor>]: {
       structure: {
         hits: number;
         hitsMax: number;

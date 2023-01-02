@@ -21,7 +21,6 @@ export class Operator {
     this.runControllerOperator();
     this.runSourceOperator();
     this.runTowerOperator();
-    this.runCreepOperator();
     this.runLinkOperator();
     this.runConstructionSiteOperator();
     this.runQueueOperator();
@@ -29,8 +28,8 @@ export class Operator {
     this.runGameOperator();
     this.runTerminalOperator();
     this.runLabOperator();
-    this.runCreepOperator();
     this.runFactoryOperator();
+    this.runCreepOperator();
   }
   private runControllerOperator() {
     new ControllerOperator();

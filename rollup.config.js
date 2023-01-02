@@ -19,7 +19,8 @@ export default {
   output: {
     file: "dist/main.js",
     format: "cjs",
-    sourcemap: false
+    sourcemap: false,
+    banner: "const __PROFILER_ENABLED__ = true"
   },
 
   plugins: [

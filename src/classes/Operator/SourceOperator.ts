@@ -4,7 +4,6 @@ import { TransportResourceJob } from "classes/Job/TransportResourceJob";
 import { Log } from "classes/Log";
 import { findPath } from "common/findPath";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
-import { roomsToMine } from "configuration/rooms/roomsToMine";
 import { myScreepsUsername } from "configuration/user";
 
 @profile

@@ -17,6 +17,7 @@ export class RoomMemoryController {
         structures: {
           spawns: {},
           extensions: {},
+          extractors: {},
           roads: {},
           towers: {},
           links: {},

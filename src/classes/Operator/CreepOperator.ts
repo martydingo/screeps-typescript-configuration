@@ -16,12 +16,8 @@ import { Log } from "classes/Log";
 
 export class CreepOperator {
   public constructor() {
-    this.runCreeps();
-  }
-  private runCreeps() {
     Object.entries(Game.creeps).forEach(([, creepToOperate]) => {
-      const creepJobType = creepToOperate.memory.jobType;
-      switch (creepJobType) {
+      switch (creepToOperate.memory.jobType) {
         case "mineSource":
           new SourceMinerCreep(creepToOperate);
           break;
@@ -80,7 +76,7 @@ export class CreepOperator {
         default:
           Log.Alert(
             // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-            `${creepJobType} registered on ${creepToOperate.name} in ${creepToOperate.room.name} does not correspond with any valid jobTypes`
+            `${creepToOperate.memory.jobType} registered on ${creepToOperate.name} in ${creepToOperate.room.name} does not correspond with any valid jobTypes`
           );
       }
     });

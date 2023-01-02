@@ -1,5 +1,5 @@
-'use strict';
 const __PROFILER_ENABLED__ = true
+'use strict';
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
@@ -661,7 +661,7 @@ ControllerOperator = __decorate([
     profile
 ], ControllerOperator);
 
-class BaseCreep {
+let BaseCreep = class BaseCreep {
     constructor(creep) {
         //
     }
@@ -902,7 +902,10 @@ class BaseCreep {
         else
             return depositResult;
     }
-}
+};
+BaseCreep = __decorate([
+    profile
+], BaseCreep);
 
 let BuildConstructionSiteCreep = class BuildConstructionSiteCreep extends BaseCreep {
     constructor(creep) {
@@ -1526,12 +1529,8 @@ UpgradeControllerCreep = __decorate([
 
 class CreepOperator {
     constructor() {
-        this.runCreeps();
-    }
-    runCreeps() {
         Object.entries(Game.creeps).forEach(([, creepToOperate]) => {
-            const creepJobType = creepToOperate.memory.jobType;
-            switch (creepJobType) {
+            switch (creepToOperate.memory.jobType) {
                 case "mineSource":
                     new SourceMinerCreep(creepToOperate);
                     break;
@@ -1577,7 +1576,7 @@ class CreepOperator {
                 default:
                     Log.Alert(
                     // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-                    `${creepJobType} registered on ${creepToOperate.name} in ${creepToOperate.room.name} does not correspond with any valid jobTypes`);
+                    `${creepToOperate.memory.jobType} registered on ${creepToOperate.name} in ${creepToOperate.room.name} does not correspond with any valid jobTypes`);
             }
         });
     }
@@ -1764,8 +1763,8 @@ class LabEngineerJob {
 }
 
 const labConfiguration = {
-    W56N12: {
-        boostLab: "63a1e52f46d2f61382721fbf"
+    W8N3: {
+        boostLab: "63a983d1da758c0321639c43"
     }
 };
 
@@ -4382,7 +4381,7 @@ class ScoutRoomJob {
 
 const roomsToClaim = [];
 
-const roomsToMine = ["W56N11"];
+const roomsToMine = ["W8N2"];
 
 const roomOperations = {
     generateRoomsArray(roomOperation) {
@@ -5026,7 +5025,6 @@ class Operator {
         this.runControllerOperator();
         this.runSourceOperator();
         this.runTowerOperator();
-        this.runCreepOperator();
         this.runLinkOperator();
         this.runConstructionSiteOperator();
         this.runQueueOperator();
@@ -5034,8 +5032,8 @@ class Operator {
         this.runGameOperator();
         this.runTerminalOperator();
         this.runLabOperator();
-        this.runCreepOperator();
         this.runFactoryOperator();
+        this.runCreepOperator();
     }
     runControllerOperator() {
         new ControllerOperator();
@@ -5425,6 +5423,33 @@ ExtensionMonitor = __decorate([
     profile
 ], ExtensionMonitor);
 
+let ExtractorMonitor = class ExtractorMonitor {
+    constructor(extractor) {
+        this.initalizeExtractorMonitorMemory(extractor);
+        this.monitorExtractors(extractor);
+    }
+    initalizeExtractorMonitorMemory(extractor) {
+        if (!extractor.room.memory.monitoring.structures.extractors) {
+            extractor.room.memory.monitoring.structures.extractors = {};
+        }
+    }
+    monitorExtractors(extractor) {
+        if (extractor) {
+            if (extractor.room.memory.monitoring.structures.extractors) {
+                extractor.room.memory.monitoring.structures.extractors[extractor.id] = {
+                    structure: {
+                        hits: extractor.hits,
+                        hitsMax: extractor.hitsMax
+                    }
+                };
+            }
+        }
+    }
+};
+ExtractorMonitor = __decorate([
+    profile
+], ExtractorMonitor);
+
 let FactoryMonitor = class FactoryMonitor {
     constructor(factory) {
         this.monitorFactory(factory);
@@ -5488,10 +5513,9 @@ LabMonitor = __decorate([
 ], LabMonitor);
 
 const linkConfig = {
-    W56N12: {
-        "6397f1bd30238608dae79135": "tx",
-        "639b23129ab55f8634547d74": "rx",
-        "63a3c1f82064b45cf37c59d8": "rx"
+    W8N3: {
+        "63ab0a6e26553d03dcda0a60": "tx",
+        "63ab0b731b113d034be84db0": "rx"
     }
 };
 
@@ -5696,43 +5720,48 @@ class StructureMonitor {
         if (this.room) {
             // console.log(JSON.stringify(this.room.find(FIND_STRUCTURES)));
             this.room.find(FIND_STRUCTURES).forEach(Structure => {
-                if (Structure.structureType === STRUCTURE_CONTROLLER) {
-                    new ControllerMonitor(Structure);
-                }
-                else if (Structure.structureType === STRUCTURE_SPAWN) {
-                    new SpawnMonitor(Structure);
-                }
-                else if (Structure.structureType === STRUCTURE_EXTENSION) {
-                    new ExtensionMonitor(Structure);
-                }
-                else if (Structure.structureType === STRUCTURE_TOWER) {
-                    new TowerMonitor(Structure);
-                }
-                else if (Structure.structureType === STRUCTURE_LINK) {
-                    new LinkMonitor(Structure);
-                }
-                else if (Structure.structureType === STRUCTURE_STORAGE) {
-                    new StorageMonitor(Structure);
-                }
-                else if (Structure.structureType === STRUCTURE_CONTAINER) {
-                    new ContainerMonitor(Structure);
-                }
-                else if (Structure.structureType === STRUCTURE_ROAD) {
-                    new RoadMonitor(Structure);
-                }
-                else if (Structure.structureType === STRUCTURE_LAB) {
-                    new LabMonitor(Structure);
-                }
-                else if (Structure.structureType === STRUCTURE_TERMINAL) {
-                    new TerminalMonitor(Structure);
-                }
-                else if (Structure.structureType === STRUCTURE_FACTORY) {
-                    new FactoryMonitor(Structure);
-                }
-                else {
-                    this.room.memory.monitoring.structures.other[Structure.id] = {
-                        structureType: Structure.structureType
-                    };
+                switch (Structure.structureType) {
+                    default:
+                        this.room.memory.monitoring.structures.other[Structure.id] = {
+                            structureType: Structure.structureType
+                        };
+                        break;
+                    case STRUCTURE_CONTROLLER:
+                        new ControllerMonitor(Structure);
+                        break;
+                    case STRUCTURE_SPAWN:
+                        new SpawnMonitor(Structure);
+                        break;
+                    case STRUCTURE_EXTENSION:
+                        new ExtensionMonitor(Structure);
+                        break;
+                    case STRUCTURE_TOWER:
+                        new TowerMonitor(Structure);
+                        break;
+                    case STRUCTURE_LINK:
+                        new LinkMonitor(Structure);
+                        break;
+                    case STRUCTURE_STORAGE:
+                        new StorageMonitor(Structure);
+                        break;
+                    case STRUCTURE_CONTAINER:
+                        new ContainerMonitor(Structure);
+                        break;
+                    case STRUCTURE_ROAD:
+                        new RoadMonitor(Structure);
+                        break;
+                    case STRUCTURE_LAB:
+                        new LabMonitor(Structure);
+                        break;
+                    case STRUCTURE_TERMINAL:
+                        new TerminalMonitor(Structure);
+                        break;
+                    case STRUCTURE_FACTORY:
+                        new FactoryMonitor(Structure);
+                        break;
+                    case STRUCTURE_EXTRACTOR:
+                        new ExtractorMonitor(Structure);
+                        break;
                 }
             });
         }
@@ -5849,6 +5878,7 @@ class RoomMemoryController {
                 structures: {
                     spawns: {},
                     extensions: {},
+                    extractors: {},
                     roads: {},
                     towers: {},
                     links: {},

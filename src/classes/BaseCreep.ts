@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { findPath } from "common/findPath";
+import { profile } from "Profiler";
 import { Log } from "./Log";
 
+@profile
 export class BaseCreep {
   public constructor(creep: Creep) {
     //

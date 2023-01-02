@@ -4,9 +4,10 @@ declare global {
     controller?: ControllerMonitorMemory;
     terminal?: TerminalMonitorMemory;
     factory?: FactoryMonitorMemory;
+    extensions: ExtensionMonitorMemory;
+    extractors: ExtractorMonitorMemory;
     labs: LabMonitorMemory;
     spawns: SpawnMonitorMemory;
-    extensions: ExtensionMonitorMemory;
     towers: TowerMonitorMemory;
     storage?: StorageMonitorMemory;
     containers: ContainerMonitorMemory;
