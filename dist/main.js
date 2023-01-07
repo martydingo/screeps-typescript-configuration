@@ -446,7 +446,7 @@ const findPath = {
     findClosestStorageToRoom(originRoomName) {
         const storageDistanceMatrix = {};
         Object.entries(Game.rooms).forEach(([roomName, room]) => {
-            if (room.storage) {
+            if (room.storage && room.storage.my) {
                 let cost = 0;
                 Game.map.findRoute(originRoomName, roomName, {
                     routeCallback() {
@@ -661,6 +661,24 @@ ControllerOperator = __decorate([
     profile
 ], ControllerOperator);
 
+const movePathColors = {
+    mineSource: "#FFEB3B",
+    workTerminal: "#66BB6A",
+    feedSpawn: "#DCE775",
+    feedTower: "#D4E157",
+    feedLink: "#CDDC39",
+    buildConstructionSite: "#FFB300",
+    upgradeController: "#FF5722",
+    lootResource: "#009688",
+    scoutRoom: "#424242",
+    claimRoom: "#1A237E",
+    reserveRoom: "#5C6BC0",
+    transportResource: "#00897B",
+    terminalEngineer: "#2E7D32",
+    labEngineer: "#03A9F4",
+    factoryEngineer: "#607D8B"
+};
+
 let BaseCreep = class BaseCreep {
     constructor(creep) {
         //
@@ -742,25 +760,49 @@ let BaseCreep = class BaseCreep {
         }
         if (creep.memory.status === "movingIntoRoom") {
             if (creep.pos.roomName === creep.memory.room) {
+                delete creep.memory.safeRoute;
                 creep.memory.status = "working";
             }
             else {
-                this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
-                // const safeRouteHome = findPath.findSafePathToRoom(creep.pos.roomName, creep.memory.room);
-                // if (safeRouteHome !== -2) {
-                //   this.moveCreep(creep, new RoomPosition(25, 25, safeRouteHome[0].room));
-                // } else {
-                //   Log.Warning(`${creep.memory.jobType} creep with UUID ${creep.name} returned ${safeRouteHome}`);
-                // }
+                // this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
+                if (!creep.memory.safeRoute) {
+                    creep.memory.safeRoute = this.fetchSafePath(creep, creep.memory.room);
+                }
+                this.moveCreep(creep, creep.memory.safeRoute[0]);
             }
         }
     }
+    fetchSafePath(creep, destinationRoomName) {
+        const safeRoute = [];
+        const safeExits = findPath.findSafePathToRoom(creep.pos.roomName, destinationRoomName);
+        if (safeExits !== -2) {
+            Object.entries(safeExits).forEach(([roomExitArrayIndexString, roomExitArrayDictionary]) => {
+                const roomExitArrayIndexUnknown = roomExitArrayIndexString;
+                const roomExitArrayIndex = roomExitArrayIndexUnknown;
+                const roomPositionCoordinates = findPath.findClearTerrain(roomExitArrayDictionary.room);
+                safeRoute[roomExitArrayIndex] = roomPositionCoordinates;
+            });
+        }
+        return safeRoute;
+    }
     moveCreep(creep, destination) {
-        const moveResult = creep.moveTo(destination, {
+        let nextDestination = destination;
+        if (creep.pos.roomName !== destination.roomName) {
+            if (!creep.memory.safeRoute) {
+                creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
+            }
+        }
+        else {
+            delete creep.memory.safeRoute;
+        }
+        if (creep.memory.safeRoute) {
+            nextDestination = new RoomPosition(creep.memory.safeRoute[0].x, creep.memory.safeRoute[0].y, creep.memory.safeRoute[0].roomName);
+        }
+        const moveResult = creep.moveTo(nextDestination, {
             visualizePathStyle: {
                 fill: "transparent",
-                stroke: "#efefef",
-                lineStyle: "dashed",
+                stroke: movePathColors[creep.memory.jobType],
+                lineStyle: "dotted",
                 strokeWidth: 0.15,
                 opacity: 0.6
             }
@@ -1919,7 +1961,7 @@ let LinkOperator = class LinkOperator {
         this.operateLinks();
     }
     operateLinks() {
-        Object.entries(Game.rooms).forEach(([roomName]) => {
+        Object.entries(Memory.rooms).forEach(([roomName]) => {
             if (Memory.rooms[roomName].monitoring.structures.links) {
                 Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
                     const linkId = linkIdString;
@@ -4399,8 +4441,21 @@ const roomOperations = {
         else {
             roomsArray = roomsArray.concat(roomsToMine);
             roomsArray = roomsArray.concat(roomsToClaim);
-            Object.entries(Game.rooms).forEach(([roomName]) => {
-                roomsArray.push(roomName);
+            Object.entries(Game.rooms).forEach(([roomName, room]) => {
+                let monitorRoom = false;
+                if (room) {
+                    if (room.controller) {
+                        if (room.controller.my) {
+                            monitorRoom = true;
+                        }
+                        if (!room.controller.owner) {
+                            monitorRoom = true;
+                        }
+                    }
+                }
+                if (monitorRoom === true) {
+                    roomsArray.push(roomName);
+                }
             });
         }
         return roomsArray;
@@ -4686,7 +4741,7 @@ class FeedSpawnJob {
 let SpawnOperator = class SpawnOperator {
     constructor() {
         this.createSpawnFeederJobs();
-        Object.entries(Game.rooms).forEach(([roomName]) => {
+        Object.entries(Memory.rooms).forEach(([roomName]) => {
             this.operateSpawns(roomName);
         });
     }
@@ -5774,7 +5829,17 @@ class RoomMonitor {
         this.roomName = RoomName;
         this.room = Game.rooms[RoomName];
         if (this.room) {
-            this.runChildMonitors();
+            if (!this.room.controller) {
+                this.runChildMonitors();
+            }
+            else {
+                if (!this.room.controller.owner) {
+                    this.runChildMonitors();
+                }
+                if (this.room.controller.my) {
+                    this.runChildMonitors();
+                }
+            }
         }
     }
     runChildMonitors() {

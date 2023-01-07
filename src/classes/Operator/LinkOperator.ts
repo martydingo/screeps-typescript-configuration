@@ -11,7 +11,7 @@ export class LinkOperator {
     this.operateLinks();
   }
   private operateLinks(): void {
-    Object.entries(Game.rooms).forEach(([roomName]) => {
+    Object.entries(Memory.rooms).forEach(([roomName]) => {
       if (Memory.rooms[roomName].monitoring.structures.links) {
         Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
           const linkId = linkIdString as Id<StructureLink>;

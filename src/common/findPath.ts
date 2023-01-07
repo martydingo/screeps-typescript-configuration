@@ -33,7 +33,7 @@ export const findPath = {
   findClosestStorageToRoom(originRoomName: string) {
     const storageDistanceMatrix: { [key: string]: number } = {};
     Object.entries(Game.rooms).forEach(([roomName, room]) => {
-      if (room.storage) {
+      if (room.storage && room.storage.my) {
         let cost = 0;
         Game.map.findRoute(originRoomName, roomName, {
           routeCallback(): void {

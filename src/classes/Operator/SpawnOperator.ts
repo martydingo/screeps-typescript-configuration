@@ -8,7 +8,7 @@ import { creepPriority } from "configuration/creeps/creepPriority";
 export class SpawnOperator {
   public constructor() {
     this.createSpawnFeederJobs();
-    Object.entries(Game.rooms).forEach(([roomName]) => {
+    Object.entries(Memory.rooms).forEach(([roomName]) => {
       this.operateSpawns(roomName);
     });
   }

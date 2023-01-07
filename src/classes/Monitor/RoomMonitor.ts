@@ -17,7 +17,16 @@ export class RoomMonitor {
     this.roomName = RoomName;
     this.room = Game.rooms[RoomName];
     if (this.room) {
-      this.runChildMonitors();
+      if (!this.room.controller) {
+        this.runChildMonitors();
+      } else {
+        if (!this.room.controller.owner) {
+          this.runChildMonitors();
+        }
+        if (this.room.controller.my) {
+          this.runChildMonitors();
+        }
+      }
     }
   }
   private runChildMonitors(): void {

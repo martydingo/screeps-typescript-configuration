@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { findPath } from "common/findPath";
+import { movePathColors } from "configuration/visual/movePathColors";
 import { profile } from "Profiler";
 import { Log } from "./Log";
 
@@ -85,26 +86,53 @@ export class BaseCreep {
     }
     if (creep.memory.status === "movingIntoRoom") {
       if (creep.pos.roomName === creep.memory.room) {
+        delete creep.memory.safeRoute;
         creep.memory.status = "working";
       } else {
-        this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
-        // const safeRouteHome = findPath.findSafePathToRoom(creep.pos.roomName, creep.memory.room);
-        // if (safeRouteHome !== -2) {
-        //   this.moveCreep(creep, new RoomPosition(25, 25, safeRouteHome[0].room));
-        // } else {
-        //   Log.Warning(`${creep.memory.jobType} creep with UUID ${creep.name} returned ${safeRouteHome}`);
-        // }
+        // this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
+        if (!creep.memory.safeRoute) {
+          creep.memory.safeRoute = this.fetchSafePath(creep, creep.memory.room);
+        }
+        this.moveCreep(creep, creep.memory.safeRoute[0]);
       }
     }
   }
+  public fetchSafePath(creep: Creep, destinationRoomName: string) {
+    const safeRoute: RoomPosition[] = [];
+    const safeExits = findPath.findSafePathToRoom(creep.pos.roomName, destinationRoomName);
+    if (safeExits !== -2) {
+      Object.entries(safeExits).forEach(([roomExitArrayIndexString, roomExitArrayDictionary]) => {
+        const roomExitArrayIndexUnknown = roomExitArrayIndexString as unknown;
+        const roomExitArrayIndex = roomExitArrayIndexUnknown as number;
+        const roomPositionCoordinates = findPath.findClearTerrain(roomExitArrayDictionary.room);
+        safeRoute[roomExitArrayIndex] = roomPositionCoordinates;
+      });
+    }
+    return safeRoute;
+  }
   public moveCreep(creep: Creep, destination: RoomPosition): ScreepsReturnCode {
-    const moveResult = creep.moveTo(destination, {
+    let nextDestination = destination;
+    if (creep.pos.roomName !== destination.roomName) {
+      if (!creep.memory.safeRoute) {
+        creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
+      }
+    } else {
+      delete creep.memory.safeRoute;
+    }
+    if (creep.memory.safeRoute) {
+      nextDestination = new RoomPosition(
+        creep.memory.safeRoute[0].x,
+        creep.memory.safeRoute[0].y,
+        creep.memory.safeRoute[0].roomName
+      );
+    }
+    const moveResult = creep.moveTo(nextDestination, {
       visualizePathStyle: {
         fill: "transparent",
-        stroke: "#efefef",
-        lineStyle: "dashed",
-        strokeWidth: 0.15,
-        opacity: 0.6
+        stroke: movePathColors[creep.memory.jobType],
+        lineStyle: "dotted",
+        strokeWidth: 0.1,
+        opacity: 0.66
       }
     });
     return moveResult;

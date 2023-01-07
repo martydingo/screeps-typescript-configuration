@@ -15,8 +15,21 @@ export const roomOperations = {
     } else {
       roomsArray = roomsArray.concat(roomsToMine);
       roomsArray = roomsArray.concat(roomsToClaim);
-      Object.entries(Game.rooms).forEach(([roomName]) => {
-        roomsArray.push(roomName);
+      Object.entries(Game.rooms).forEach(([roomName, room]) => {
+        let monitorRoom = false;
+        if (room) {
+          if (room.controller) {
+            if (room.controller.my) {
+              monitorRoom = true;
+            }
+            if (!room.controller.owner) {
+              monitorRoom = true;
+            }
+          }
+        }
+        if (monitorRoom === true) {
+          roomsArray.push(roomName);
+        }
       });
     }
     return roomsArray;
