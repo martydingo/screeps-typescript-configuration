@@ -11,10 +11,13 @@ export function creepPriority(room: Room): { [creepType: string]: number } {
     feedLink: 9,
     reserveRoom: 10,
     claimRoom: 11,
-    buildConstructionSite: 12,
-    terminalEngineer: 13,
-    labEngineer: 14,
-    factoryEngineer: 15
+    defendRoom: 12,
+    buildConstructionSite: 13,
+    terminalEngineer: 14,
+    labEngineer: 15,
+    factoryEngineer: 16,
+    tankRoom: 17,
+    dismantleEnemyBuildings: 18
   };
   if (room) {
     let storageContainsEnergy = false;
@@ -43,13 +46,16 @@ export function creepPriority(room: Room): { [creepType: string]: number } {
         scoutRoom: priority.scoutRoom,
         reserveRoom: priority.reserveRoom,
         claimRoom: priority.claimRoom,
+        defendRoom: priority.defendRoom,
         buildConstructionSite: priority.buildConstructionSite,
         feedLink: priority.feedLink,
         workTerminal: priority.workTerminal,
         lootResource: priority.lootResource,
         terminalEngineer: priority.terminalEngineer,
         labEngineer: priority.labEngineer,
-        factoryEngineer: priority.factoryEngineer
+        factoryEngineer: priority.factoryEngineer,
+        tankRoom: priority.tankRoom,
+        dismantleEnemyBuildings: priority.dismantleEnemyBuildings
       };
     }
   }

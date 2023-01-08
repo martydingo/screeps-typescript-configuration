@@ -9,9 +9,12 @@ export const creepNumbers: { [key: string]: number } = {
   lootResource: 1,
   scoutRoom: 1,
   claimRoom: 1,
+  defendRoom: 1,
   reserveRoom: 1,
   transportResource: 2,
   terminalEngineer: 1,
   labEngineer: 1,
-  factoryEngineer: 1
+  factoryEngineer: 1,
+  tankRoom: 0,
+  dismantleEnemyBuildings: 1
 };
