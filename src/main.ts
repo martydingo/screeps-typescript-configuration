@@ -12,7 +12,7 @@ import * as Profiler from "Profiler";
 global.Profiler = Profiler.init();
 export const loop = () => {
   Log.Informational(`Current game tick is ${Game.time}`);
-  garbageCollect.creeps();
+  // garbageCollect.creeps();
   new MemoryController();
   new Monitor();
   new Operator();

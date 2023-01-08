@@ -499,13 +499,13 @@ const creepNumbers = {
     feedSpawn: 2,
     feedTower: 1,
     feedLink: 1,
-    buildConstructionSite: 2,
+    buildConstructionSite: 1,
     upgradeController: 1,
     lootResource: 1,
     scoutRoom: 1,
     claimRoom: 1,
     reserveRoom: 1,
-    transportResource: 1,
+    transportResource: 2,
     terminalEngineer: 1,
     labEngineer: 1,
     factoryEngineer: 1
@@ -803,8 +803,8 @@ let BaseCreep = class BaseCreep {
                 fill: "transparent",
                 stroke: movePathColors[creep.memory.jobType],
                 lineStyle: "dotted",
-                strokeWidth: 0.15,
-                opacity: 0.6
+                strokeWidth: 0.1,
+                opacity: 0.66
             }
         });
         return moveResult;
@@ -5131,17 +5131,6 @@ class Operator {
     }
 }
 
-const garbageCollect = {
-    creeps() {
-        for (const name in Memory.creeps) {
-            if (!(name in Game.creeps)) {
-                Log.Debug(`Clearing ${name} Creep Memory`);
-                delete Memory.creeps[name];
-            }
-        }
-    }
-};
-
 let ConstructionSiteMonitor = class ConstructionSiteMonitor {
     constructor(room) {
         this.room = room;
@@ -5570,6 +5559,7 @@ LabMonitor = __decorate([
 const linkConfig = {
     W56N12: {
         "6397f1bd30238608dae79135": "tx",
+        "63b5d422245b4f17984d7ec3": "tx",
         "639b23129ab55f8634547d74": "rx",
         "63a3c1f82064b45cf37c59d8": "rx"
     }
@@ -5916,7 +5906,8 @@ class QueueMemoryController {
     initializeQueueMemory() {
         Memory.queues = {
             jobQueue: {},
-            spawnQueue: {}
+            spawnQueue: {},
+            attackQueue: {}
         };
     }
     initializeSpawnQueueMemory() {
@@ -6019,9 +6010,23 @@ class MemoryController {
     maintainMemory() {
         this.maintainQueueMemory();
         this.maintainRoomMemory();
+        this.maintainCreepMemory();
     }
     maintainQueueMemory() {
         new QueueMemoryController();
+    }
+    maintainCreepMemory() {
+        if (!Memory.creeps) {
+            Memory.creeps = {};
+        }
+        else {
+            for (const name in Memory.creeps) {
+                if (!(name in Game.creeps)) {
+                    Log.Debug(`Clearing ${name} Creep Memory`);
+                    delete Memory.creeps[name];
+                }
+            }
+        }
     }
     maintainRoomMemory() {
         if (!Memory.rooms) {
@@ -6038,7 +6043,7 @@ class MemoryController {
 global.Profiler = init();
 const loop = () => {
     Log.Informational(`Current game tick is ${Game.time}`);
-    garbageCollect.creeps();
+    // garbageCollect.creeps();
     new MemoryController();
     new Monitor();
     new Operator();

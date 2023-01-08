@@ -20,7 +20,8 @@ export class QueueMemoryController {
   private initializeQueueMemory(): void {
     Memory.queues = {
       jobQueue: {},
-      spawnQueue: {}
+      spawnQueue: {},
+      attackQueue: {}
     };
   }
   private initializeSpawnQueueMemory(): void {
