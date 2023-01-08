@@ -13,7 +13,9 @@ export class LabOperator {
           const labId = labIdString as Id<StructureLab>;
           const lab = Game.getObjectById(labId);
           if (lab) {
-            this.manageLabJobs(lab);
+            if (lab.my) {
+              this.manageLabJobs(lab);
+            }
           }
         });
         this.maintainLabEngineerJobs(roomName);

@@ -9,7 +9,10 @@ export class BuildConstructionSiteCreep extends BaseCreep {
     this.runCreep(creep);
   }
   private runCreep(creep: Creep) {
-    this.checkIfFull(creep, RESOURCE_ENERGY);
+    this.moveHome(creep);
+    if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
+      this.checkIfFull(creep, RESOURCE_ENERGY);
+    }
     if (creep.memory.status === "working") {
       const constructionSites = Object.entries(Memory.rooms[creep.memory.room].monitoring.constructionSites).sort(
         ([, constructionSiteMemoryA], [, constructionSiteMemoryB]) =>

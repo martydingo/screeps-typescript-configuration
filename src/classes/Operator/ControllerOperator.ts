@@ -2,6 +2,7 @@ import { profile } from "Profiler";
 import { UpgradeControllerJob } from "classes/Job/UpgradeControllerJob";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 import { findPath } from "common/findPath";
+import { creepNumbersOverride } from "configuration/rooms/creepNumbersOverride";
 
 @profile
 export class ControllerOperator {
@@ -29,7 +30,12 @@ export class ControllerOperator {
                   jobType: "upgradeController",
                   controllerId: controller.id
                 };
-                const count: number = creepNumbers[JobParameters.jobType];
+                let count: number = creepNumbers[JobParameters.jobType];
+                if (creepNumbersOverride[roomName]) {
+                  if (creepNumbersOverride[roomName][JobParameters.jobType]) {
+                    count = count + creepNumbersOverride[roomName][JobParameters.jobType];
+                  }
+                }
                 new UpgradeControllerJob(JobParameters, count);
               }
             }

@@ -9,7 +9,10 @@ export class UpgradeControllerCreep extends BaseCreep {
   }
   private runCreep(creep: Creep) {
     this.boostBodyParts(creep, WORK, RESOURCE_CATALYZED_GHODIUM_ACID);
-    this.checkIfFull(creep, RESOURCE_ENERGY);
+    this.moveHome(creep);
+    if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
+      this.checkIfFull(creep, RESOURCE_ENERGY);
+    }
     if (creep.memory.status === "fetchingResource") {
       this.fetchSource(creep);
     } else {

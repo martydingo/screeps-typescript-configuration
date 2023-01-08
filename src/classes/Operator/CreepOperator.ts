@@ -1,5 +1,7 @@
 import { BuildConstructionSiteCreep } from "classes/Creep/BuildConstructionSiteCreep";
 import { ClaimRoomCreep } from "classes/Creep/ClaimRoomCreep";
+import { DefendRoomCreep } from "classes/Creep/DefendRoomCreep";
+import { DismantleEnemyBuildingsCreep } from "classes/Creep/DismantleEnemyBuildingsCreep";
 import { FactoryEngineerCreep } from "classes/Creep/FactoryEngineerCreep";
 import { FeedLinkCreep } from "classes/Creep/FeedLinkCreep";
 import { FeedSpawnCreep } from "classes/Creep/FeedSpawnCreep";
@@ -9,6 +11,7 @@ import { LootResourceCreep } from "classes/Creep/LootResourceCreep";
 import { ReserveRoomCreep } from "classes/Creep/ReserveRoomCreep";
 import { ScoutRoomCreep } from "classes/Creep/ScoutRoomCreep";
 import { SourceMinerCreep } from "classes/Creep/SourceMinerCreep";
+import { TankRoomCreep } from "classes/Creep/TankRoomCreep";
 import { TerminalEngineerCreep } from "classes/Creep/TerminalEngineerCreep";
 import { TransportResourceCreep } from "classes/Creep/TransportResourceCreep";
 import { UpgradeControllerCreep } from "classes/Creep/UpgradeControllerCreep";
@@ -54,8 +57,16 @@ export class CreepOperator {
           new ScoutRoomCreep(creepToOperate);
           break;
 
+        case "tankRoom":
+          new TankRoomCreep(creepToOperate);
+          break;
+
         case "claimRoom":
           new ClaimRoomCreep(creepToOperate);
+          break;
+
+        case "defendRoom":
+          new DefendRoomCreep(creepToOperate);
           break;
 
         case "reserveRoom":
@@ -72,6 +83,10 @@ export class CreepOperator {
 
         case "factoryEngineer":
           new FactoryEngineerCreep(creepToOperate);
+          break;
+
+        case "dismantleEnemyBuildings":
+          new DismantleEnemyBuildingsCreep(creepToOperate);
           break;
         default:
           Log.Alert(

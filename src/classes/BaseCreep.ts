@@ -75,7 +75,9 @@ export class BaseCreep {
         }
       }
     } else {
-      creep.memory.status = "working";
+      if (creep.memory.status === "fetchingBoosts") {
+        creep.memory.status = "working";
+      }
     }
   }
   public moveHome(creep: Creep): void {
@@ -92,6 +94,13 @@ export class BaseCreep {
         // this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
         if (!creep.memory.safeRoute) {
           creep.memory.safeRoute = this.fetchSafePath(creep, creep.memory.room);
+        }
+        if (creep.memory.safeRoute[1]) {
+          if (creep.pos.roomName === creep.memory.safeRoute[0].roomName) {
+            delete creep.memory.safeRoute[0];
+            creep.memory.safeRoute[0] = creep.memory.safeRoute[1];
+            delete creep.memory.safeRoute[1];
+          }
         }
         this.moveCreep(creep, creep.memory.safeRoute[0]);
       }
@@ -256,6 +265,24 @@ export class BaseCreep {
           if (closestDroppedEnergy) {
             this.pickupResource(creep, closestDroppedEnergy);
           }
+        } else {
+          if (Object.entries(creep.body).filter(([, bodyPart]) => bodyPart.type === WORK)) {
+            const sourceArray: Source[] = [];
+            Object.entries(creep.room.memory.monitoring.sources).forEach(([sourceId]) => {
+              const source = Game.getObjectById(sourceId as Id<Source>);
+              if (source) {
+                if (source.energy <= source.energyCapacity) {
+                  sourceArray.push(source);
+                }
+              }
+            });
+            if (sourceArray.length > 0) {
+              const closestSource = creep.pos.findClosestByPath(sourceArray);
+              if (closestSource) {
+                this.harvestSource(creep, closestSource);
+              }
+            }
+          }
         }
       }
     }
@@ -271,5 +298,33 @@ export class BaseCreep {
       const moveResult = this.moveCreep(creep, destination.pos);
       return moveResult;
     } else return depositResult;
+  }
+
+  public healCreep(creep: Creep, targetCreep?: Creep) {
+    if (!targetCreep) {
+      targetCreep = creep;
+    }
+    const healResult = creep.heal(targetCreep);
+    if (healResult === ERR_NOT_IN_RANGE) {
+      this.moveCreep(creep, targetCreep.pos);
+    } else {
+      if (healResult !== OK) {
+        Log.Alert(
+          `${creep.name} in room ${creep.pos.roomName} tried to heal ${targetCreep.name} in room ${targetCreep.pos.roomName}, but failed with a result of ${healResult}`
+        );
+      }
+    }
+  }
+  public attackCreep(creep: Creep, targetCreep: Creep) {
+    const attackResult = creep.attack(targetCreep);
+    if (attackResult === ERR_NOT_IN_RANGE) {
+      this.moveCreep(creep, targetCreep.pos);
+    } else {
+      if (attackResult !== OK) {
+        Log.Alert(
+          `${creep.name} in room ${creep.pos.roomName} tried to attack ${targetCreep.name} in room ${targetCreep.pos.roomName}, but failed with a result of ${attackResult}`
+        );
+      }
+    }
   }
 }

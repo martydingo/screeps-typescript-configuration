@@ -22,15 +22,13 @@ export class ClaimRoomCreep extends BaseCreep {
               if (claimResult === ERR_NOT_IN_RANGE) {
                 this.moveCreep(creep, controllerToClaim.pos);
               } else if (claimResult === ERR_NOT_OWNER) {
-                if (controllerToClaim.owner?.username === "Invader") {
-                  const attackControllerResult = creep.attackController(controllerToClaim);
-                  if (attackControllerResult === ERR_NOT_IN_RANGE) {
-                    this.moveCreep(creep, controllerToClaim.pos);
-                  } else {
-                    Log.Warning(
-                      `Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`
-                    );
-                  }
+                const attackControllerResult = creep.attackController(controllerToClaim);
+                if (attackControllerResult === ERR_NOT_IN_RANGE) {
+                  this.moveCreep(creep, controllerToClaim.pos);
+                } else {
+                  Log.Warning(
+                    `Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`
+                  );
                 }
               } else Log.Warning(`Claim Result for ${creep.name} in ${creep.pos.roomName}: ${claimResult}`);
             }

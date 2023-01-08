@@ -15,10 +15,24 @@ export class StructureMonitor {
   private room: Room;
   public constructor(room: Room) {
     this.room = room;
+
     this.monitorStructures();
   }
+
   private monitorStructures(): void {
     if (this.room) {
+      this.room.memory.monitoring.structures = {
+        spawns: {},
+        extensions: {},
+        extractors: {},
+        roads: {},
+        towers: {},
+        links: {},
+        containers: {},
+        labs: {},
+        walls: {},
+        other: {}
+      };
       // console.log(JSON.stringify(this.room.find(FIND_STRUCTURES)));
       this.room.find(FIND_STRUCTURES).forEach(Structure => {
         switch (Structure.structureType) {

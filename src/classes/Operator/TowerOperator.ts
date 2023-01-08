@@ -13,8 +13,10 @@ export class TowerOperator {
             const towerId = towerIdString as Id<StructureTower>;
             const tower = Game.getObjectById(towerId);
             if (tower) {
-              this.createTowerFeederJob(tower);
-              this.operateTowers(tower);
+              if (tower.my) {
+                this.createTowerFeederJob(tower);
+                this.operateTowers(tower);
+              }
             }
           });
         }

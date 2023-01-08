@@ -18,8 +18,10 @@ export class LinkOperator {
           const link = Game.getObjectById(linkId);
           const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
           if (linkMode === "tx" && link) {
-            this.createLinkFeederJob(link);
-            this.transmitEnergy(link);
+            if (link.my) {
+              this.createLinkFeederJob(link);
+              this.transmitEnergy(link);
+            }
           }
         });
       }

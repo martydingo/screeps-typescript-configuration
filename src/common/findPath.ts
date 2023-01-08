@@ -3,11 +3,13 @@ import { myScreepsUsername } from "configuration/user";
 
 export const findPath = {
   findClearTerrain(roomName: string): RoomPosition {
-    const roomTerrainMatrix = Game.rooms[roomName].getTerrain();
-    for (let x = 15; x < 35; x++) {
-      for (let y = 15; y < 35; y++) {
-        if (roomTerrainMatrix.get(x, y) === 0) {
-          return new RoomPosition(x, y, roomName);
+    if (Game.rooms[roomName]) {
+      const roomTerrainMatrix = Game.rooms[roomName].getTerrain();
+      for (let x = 15; x < 35; x++) {
+        for (let y = 15; y < 35; y++) {
+          if (roomTerrainMatrix.get(x, y) === 0) {
+            return new RoomPosition(x, y, roomName);
+          }
         }
       }
     }
@@ -15,15 +17,17 @@ export const findPath = {
   },
   findClosestSpawnToRoom(roomName: string) {
     const spawnDistanceMatrix: { [key: string]: number } = {};
-    Object.entries(Game.spawns).forEach(([spawnName, spawn]) => {
-      let cost = 0;
-      Game.map.findRoute(spawn.pos.roomName, roomName, {
-        routeCallback(): void {
-          cost = cost + 1;
-        }
+    Object.entries(Game.spawns)
+      .filter(([, spawn]) => spawn.isActive())
+      .forEach(([spawnName, spawn]) => {
+        let cost = 0;
+        Game.map.findRoute(spawn.pos.roomName, roomName, {
+          routeCallback(): void {
+            cost = cost + 1;
+          }
+        });
+        spawnDistanceMatrix[spawnName] = cost;
       });
-      spawnDistanceMatrix[spawnName] = cost;
-    });
     Object.entries(spawnDistanceMatrix).sort(
       ([spawnNameA], [spawnNameB]) => spawnDistanceMatrix[spawnNameB] - spawnDistanceMatrix[spawnNameA]
     );
@@ -54,6 +58,9 @@ export const findPath = {
     const safeRoute = Game.map.findRoute(originRoomName, destinationRoomName, {
       routeCallback(nextRoom): number {
         let roomMonitored = false;
+        if (nextRoom === "W55N11") {
+          return 1;
+        }
         if (Game.rooms[nextRoom]) {
           if (Game.rooms[nextRoom].controller?.owner?.username === myScreepsUsername) {
             return 1;

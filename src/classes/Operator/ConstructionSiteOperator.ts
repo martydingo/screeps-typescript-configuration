@@ -23,7 +23,7 @@ export class ConstructionSiteOperator {
   }
   private createConstructionSiteJob(roomName: string) {
     let spawnRoom = roomName;
-    if (Object.entries(Memory.rooms[roomName].monitoring.structures.spawns).length > 0) {
+    if (Object.entries(Memory.rooms[roomName].monitoring.structures.spawns).length === 0) {
       spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
     }
     const JobParameters: BuildConstructionSiteJobParameters = {
@@ -37,7 +37,11 @@ export class ConstructionSiteOperator {
   }
   private deleteConstructionSiteJob(roomName: string) {
     let spawnRoom = roomName;
-    if (Object.entries(Memory.rooms[roomName].monitoring.structures.spawns).length > 0) {
+    if (
+      Object.entries(Memory.rooms[roomName].monitoring.structures.spawns).filter(
+        ([, spawn]) => spawn.structure.hits > 0
+      ).length === 0
+    ) {
       spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
     }
     const JobParameters: BuildConstructionSiteJobParameters = {

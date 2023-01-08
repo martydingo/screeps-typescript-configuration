@@ -13,8 +13,10 @@ export class FactoryOperator {
           if (factoryMemory) {
             const factory = Game.getObjectById(factoryMemory.id);
             if (factory) {
-              this.manageFactoryJobs(factory);
-              this.maintainFactoryEngineerJobs(factory);
+              if (factory.my) {
+                this.manageFactoryJobs(factory);
+                this.maintainFactoryEngineerJobs(factory);
+              }
             }
           }
         }

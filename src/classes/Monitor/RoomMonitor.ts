@@ -1,3 +1,5 @@
+import { roomsToClaim } from "configuration/rooms/roomsToClaim";
+import { roomsToMine } from "configuration/rooms/roomsToMine";
 import { ConstructionSiteMonitor } from "./RoomMonitor/ConstructionSiteMonitor";
 import { DroppedResourceMonitor } from "./RoomMonitor/DroppedResourceMonitor";
 import { EnergyMonitor } from "./RoomMonitor/EnergyMonitor";
@@ -24,6 +26,9 @@ export class RoomMonitor {
           this.runChildMonitors();
         }
         if (this.room.controller.my) {
+          this.runChildMonitors();
+        }
+        if (roomsToClaim.includes(this.roomName) || roomsToMine.includes(this.roomName)) {
           this.runChildMonitors();
         }
       }

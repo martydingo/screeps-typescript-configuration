@@ -17,12 +17,15 @@ declare global {
         | BuildConstructionSiteJobParameters
         | LootResourceJobParameters
         | ScoutRoomJobParameters
+        | TankRoomJobParameters
         | ClaimRoomJobParameters
         | ReserveRoomJobParameters
         | TransportResourceJobParameters
         | TerminalEngineerJobParameters
         | LabEngineerJobParameters
-        | FactoryEngineerJobParameters;
+        | FactoryEngineerJobParameters
+        | DefendRoomJobParameters
+        | DismantleEnemyBuildingsJobParameters;
     };
   }
 }

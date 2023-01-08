@@ -418,11 +418,13 @@ const myScreepsUsername = "Marty";
 
 const findPath = {
     findClearTerrain(roomName) {
-        const roomTerrainMatrix = Game.rooms[roomName].getTerrain();
-        for (let x = 15; x < 35; x++) {
-            for (let y = 15; y < 35; y++) {
-                if (roomTerrainMatrix.get(x, y) === 0) {
-                    return new RoomPosition(x, y, roomName);
+        if (Game.rooms[roomName]) {
+            const roomTerrainMatrix = Game.rooms[roomName].getTerrain();
+            for (let x = 15; x < 35; x++) {
+                for (let y = 15; y < 35; y++) {
+                    if (roomTerrainMatrix.get(x, y) === 0) {
+                        return new RoomPosition(x, y, roomName);
+                    }
                 }
             }
         }
@@ -430,7 +432,9 @@ const findPath = {
     },
     findClosestSpawnToRoom(roomName) {
         const spawnDistanceMatrix = {};
-        Object.entries(Game.spawns).forEach(([spawnName, spawn]) => {
+        Object.entries(Game.spawns)
+            .filter(([, spawn]) => spawn.isActive())
+            .forEach(([spawnName, spawn]) => {
             let cost = 0;
             Game.map.findRoute(spawn.pos.roomName, roomName, {
                 routeCallback() {
@@ -465,6 +469,9 @@ const findPath = {
             routeCallback(nextRoom) {
                 var _a, _b;
                 let roomMonitored = false;
+                if (nextRoom === "W55N11") {
+                    return 1;
+                }
                 if (Game.rooms[nextRoom]) {
                     if (((_b = (_a = Game.rooms[nextRoom].controller) === null || _a === void 0 ? void 0 : _a.owner) === null || _b === void 0 ? void 0 : _b.username) === myScreepsUsername) {
                         return 1;
@@ -499,16 +506,19 @@ const creepNumbers = {
     feedSpawn: 2,
     feedTower: 1,
     feedLink: 1,
-    buildConstructionSite: 2,
+    buildConstructionSite: 1,
     upgradeController: 1,
     lootResource: 1,
     scoutRoom: 1,
     claimRoom: 1,
+    defendRoom: 1,
     reserveRoom: 1,
-    transportResource: 1,
+    transportResource: 2,
     terminalEngineer: 1,
     labEngineer: 1,
-    factoryEngineer: 1
+    factoryEngineer: 1,
+    tankRoom: 0,
+    dismantleEnemyBuildings: 1
 };
 
 let ConstructionSiteOperator = class ConstructionSiteOperator {
@@ -531,7 +541,7 @@ let ConstructionSiteOperator = class ConstructionSiteOperator {
     }
     createConstructionSiteJob(roomName) {
         let spawnRoom = roomName;
-        if (Object.entries(Memory.rooms[roomName].monitoring.structures.spawns).length > 0) {
+        if (Object.entries(Memory.rooms[roomName].monitoring.structures.spawns).length === 0) {
             spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
         }
         const JobParameters = {
@@ -545,7 +555,7 @@ let ConstructionSiteOperator = class ConstructionSiteOperator {
     }
     deleteConstructionSiteJob(roomName) {
         let spawnRoom = roomName;
-        if (Object.entries(Memory.rooms[roomName].monitoring.structures.spawns).length > 0) {
+        if (Object.entries(Memory.rooms[roomName].monitoring.structures.spawns).filter(([, spawn]) => spawn.structure.hits > 0).length === 0) {
             spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
         }
         const JobParameters = {
@@ -576,7 +586,8 @@ class UpgradeControllerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.controllerId === this.JobParameters.controllerId)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -622,6 +633,32 @@ class UpgradeControllerJob {
     }
 }
 
+const creepNumbersOverride = {
+    // W00N00: {
+    //   mineSource: 0,
+    //   workTerminal: 0,
+    //   feedSpawn: 0,
+    //   feedTower: 0,
+    //   feedLink: 0,
+    //   buildConstructionSite: 0,
+    //   upgradeController: 0,
+    //   lootResource: 0,
+    //   scoutRoom: 0,
+    //   claimRoom: 0,
+    //   defendRoom: 0,
+    //   reserveRoom: 0,
+    //   transportResource: 0,
+    //   terminalEngineer: 0,
+    //   labEngineer: 0,
+    //   factoryEngineer: 0,
+    //   tankRoom: 0,
+    //   dismantleEnemyBuildings: 0
+    // }
+    W56N12: {
+        upgradeController: -1
+    }
+};
+
 let ControllerOperator = class ControllerOperator {
     constructor() {
         this.operateController();
@@ -647,7 +684,12 @@ let ControllerOperator = class ControllerOperator {
                                     jobType: "upgradeController",
                                     controllerId: controller.id
                                 };
-                                const count = creepNumbers[JobParameters.jobType];
+                                let count = creepNumbers[JobParameters.jobType];
+                                if (creepNumbersOverride[roomName]) {
+                                    if (creepNumbersOverride[roomName][JobParameters.jobType]) {
+                                        count = count + creepNumbersOverride[roomName][JobParameters.jobType];
+                                    }
+                                }
                                 new UpgradeControllerJob(JobParameters, count);
                             }
                         }
@@ -668,10 +710,13 @@ const movePathColors = {
     feedTower: "#D4E157",
     feedLink: "#CDDC39",
     buildConstructionSite: "#FFB300",
+    dismantleEnemyBuildings: "#FFB300",
     upgradeController: "#FF5722",
     lootResource: "#009688",
     scoutRoom: "#424242",
+    tankRoom: "#646464",
     claimRoom: "#1A237E",
+    defendRoom: "#B91C1C",
     reserveRoom: "#5C6BC0",
     transportResource: "#00897B",
     terminalEngineer: "#2E7D32",
@@ -749,7 +794,9 @@ let BaseCreep = class BaseCreep {
             }
         }
         else {
-            creep.memory.status = "working";
+            if (creep.memory.status === "fetchingBoosts") {
+                creep.memory.status = "working";
+            }
         }
     }
     moveHome(creep) {
@@ -767,6 +814,13 @@ let BaseCreep = class BaseCreep {
                 // this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
                 if (!creep.memory.safeRoute) {
                     creep.memory.safeRoute = this.fetchSafePath(creep, creep.memory.room);
+                }
+                if (creep.memory.safeRoute[1]) {
+                    if (creep.pos.roomName === creep.memory.safeRoute[0].roomName) {
+                        delete creep.memory.safeRoute[0];
+                        creep.memory.safeRoute[0] = creep.memory.safeRoute[1];
+                        delete creep.memory.safeRoute[1];
+                    }
                 }
                 this.moveCreep(creep, creep.memory.safeRoute[0]);
             }
@@ -803,8 +857,8 @@ let BaseCreep = class BaseCreep {
                 fill: "transparent",
                 stroke: movePathColors[creep.memory.jobType],
                 lineStyle: "dotted",
-                strokeWidth: 0.15,
-                opacity: 0.6
+                strokeWidth: 0.1,
+                opacity: 0.66
             }
         });
         return moveResult;
@@ -932,6 +986,25 @@ let BaseCreep = class BaseCreep {
                         this.pickupResource(creep, closestDroppedEnergy);
                     }
                 }
+                else {
+                    if (Object.entries(creep.body).filter(([, bodyPart]) => bodyPart.type === WORK)) {
+                        const sourceArray = [];
+                        Object.entries(creep.room.memory.monitoring.sources).forEach(([sourceId]) => {
+                            const source = Game.getObjectById(sourceId);
+                            if (source) {
+                                if (source.energy <= source.energyCapacity) {
+                                    sourceArray.push(source);
+                                }
+                            }
+                        });
+                        if (sourceArray.length > 0) {
+                            const closestSource = creep.pos.findClosestByPath(sourceArray);
+                            if (closestSource) {
+                                this.harvestSource(creep, closestSource);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -944,6 +1017,31 @@ let BaseCreep = class BaseCreep {
         else
             return depositResult;
     }
+    healCreep(creep, targetCreep) {
+        if (!targetCreep) {
+            targetCreep = creep;
+        }
+        const healResult = creep.heal(targetCreep);
+        if (healResult === ERR_NOT_IN_RANGE) {
+            this.moveCreep(creep, targetCreep.pos);
+        }
+        else {
+            if (healResult !== OK) {
+                Log.Alert(`${creep.name} in room ${creep.pos.roomName} tried to heal ${targetCreep.name} in room ${targetCreep.pos.roomName}, but failed with a result of ${healResult}`);
+            }
+        }
+    }
+    attackCreep(creep, targetCreep) {
+        const attackResult = creep.attack(targetCreep);
+        if (attackResult === ERR_NOT_IN_RANGE) {
+            this.moveCreep(creep, targetCreep.pos);
+        }
+        else {
+            if (attackResult !== OK) {
+                Log.Alert(`${creep.name} in room ${creep.pos.roomName} tried to attack ${targetCreep.name} in room ${targetCreep.pos.roomName}, but failed with a result of ${attackResult}`);
+            }
+        }
+    }
 };
 BaseCreep = __decorate([
     profile
@@ -955,7 +1053,10 @@ let BuildConstructionSiteCreep = class BuildConstructionSiteCreep extends BaseCr
         this.runCreep(creep);
     }
     runCreep(creep) {
-        this.checkIfFull(creep, RESOURCE_ENERGY);
+        this.moveHome(creep);
+        if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
+            this.checkIfFull(creep, RESOURCE_ENERGY);
+        }
         if (creep.memory.status === "working") {
             const constructionSites = Object.entries(Memory.rooms[creep.memory.room].monitoring.constructionSites).sort(([, constructionSiteMemoryA], [, constructionSiteMemoryB]) => 
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/restrict-plus-operands, @typescript-eslint/no-unsafe-return
@@ -998,7 +1099,6 @@ let ClaimRoomCreep = class ClaimRoomCreep extends BaseCreep {
         this.runCreep(creep);
     }
     runCreep(creep) {
-        var _a;
         this.moveHome(creep);
         if (creep.memory.status === "working") {
             if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
@@ -1013,14 +1113,12 @@ let ClaimRoomCreep = class ClaimRoomCreep extends BaseCreep {
                                 this.moveCreep(creep, controllerToClaim.pos);
                             }
                             else if (claimResult === ERR_NOT_OWNER) {
-                                if (((_a = controllerToClaim.owner) === null || _a === void 0 ? void 0 : _a.username) === "Invader") {
-                                    const attackControllerResult = creep.attackController(controllerToClaim);
-                                    if (attackControllerResult === ERR_NOT_IN_RANGE) {
-                                        this.moveCreep(creep, controllerToClaim.pos);
-                                    }
-                                    else {
-                                        Log.Warning(`Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`);
-                                    }
+                                const attackControllerResult = creep.attackController(controllerToClaim);
+                                if (attackControllerResult === ERR_NOT_IN_RANGE) {
+                                    this.moveCreep(creep, controllerToClaim.pos);
+                                }
+                                else {
+                                    Log.Warning(`Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`);
                                 }
                             }
                             else
@@ -1035,6 +1133,131 @@ let ClaimRoomCreep = class ClaimRoomCreep extends BaseCreep {
 ClaimRoomCreep = __decorate([
     profile
 ], ClaimRoomCreep);
+
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+function fetchHostileCreep(room) {
+    const cachedHostiles = Object.entries(room.memory.monitoring.hostiles);
+    if (cachedHostiles.length === 1) {
+        const hostileIdUnknown = cachedHostiles[0][0];
+        const hostileId = hostileIdUnknown;
+        const hostile = Game.getObjectById(hostileId);
+        if (hostile) {
+            return hostile;
+        }
+    }
+    else {
+        if (cachedHostiles.length > 1) {
+            const cachedHostilesThatHeal = cachedHostiles.filter(([, cachedHostileMemory]) => cachedHostileMemory.bodyParts.includes(HEAL) === true);
+            if (cachedHostilesThatHeal.length === 1) {
+                const hostileIdUnknown = cachedHostilesThatHeal[0][0];
+                const hostileId = hostileIdUnknown;
+                const hostile = Game.getObjectById(hostileId);
+                if (hostile) {
+                    return hostile;
+                }
+            }
+            else {
+                if (cachedHostilesThatHeal.length > 1) {
+                    const cachedHostilesThatHealLowestHP = cachedHostiles.sort(([, cachedHostileMemoryA], [, cachedHostileMemoryB]) => cachedHostileMemoryA.health.hits - cachedHostileMemoryB.health.hits);
+                    const hostileIdUnknown = cachedHostilesThatHealLowestHP[0][0];
+                    const hostileId = hostileIdUnknown;
+                    const hostile = Game.getObjectById(hostileId);
+                    if (hostile) {
+                        return hostile;
+                    }
+                }
+            }
+        }
+    }
+    return undefined;
+}
+
+let DefendRoomCreep = class DefendRoomCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        if (Object.entries(creep.body).filter(([, bodyPart]) => bodyPart.type === HEAL).length > 0) {
+            if (creep.hits < creep.hitsMax) {
+                this.healCreep(creep);
+            }
+        }
+        this.moveHome(creep);
+        if (creep.memory.status === "working") {
+            const hostileCreep = fetchHostileCreep(creep.room);
+            if (hostileCreep) {
+                this.attackCreep(creep, hostileCreep);
+            }
+            else {
+                const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
+                const recycleResult = closestSpawn.recycleCreep(creep);
+                if (recycleResult === ERR_NOT_IN_RANGE) {
+                    this.moveCreep(creep, closestSpawn.pos);
+                }
+                else {
+                    if (recycleResult === OK) {
+                        Log.Debug(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`);
+                    }
+                    else {
+                        Log.Warning(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`);
+                    }
+                }
+            }
+        }
+    }
+};
+DefendRoomCreep = __decorate([
+    profile
+], DefendRoomCreep);
+
+let DismantleEnemyBuildingsCreep = class DismantleEnemyBuildingsCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.moveHome(creep);
+        if (creep.memory.status === "working") {
+            let buildingToDismantle;
+            if (creep.room.name === creep.memory.room) {
+                if (creep.room.memory.monitoring.structures.spawns) {
+                    const cachedSpawnsInRoomDictionary = Object.entries(creep.room.memory.monitoring.structures.spawns);
+                    if (cachedSpawnsInRoomDictionary.length > 0) {
+                        if (cachedSpawnsInRoomDictionary.length === 1) {
+                            const spawnToDismantleId = cachedSpawnsInRoomDictionary[0][1].id;
+                            const spawnToDismantle = Game.getObjectById(spawnToDismantleId);
+                            if (spawnToDismantle) {
+                                buildingToDismantle = spawnToDismantle;
+                            }
+                        }
+                    }
+                    else {
+                        const manualRampartToKill = Game.getObjectById("63341e08b0485dbcf5342fd4");
+                        if (manualRampartToKill) {
+                            buildingToDismantle = manualRampartToKill;
+                        }
+                    }
+                }
+            }
+            if (buildingToDismantle) {
+                const dismantleResult = creep.dismantle(buildingToDismantle);
+                if (dismantleResult === ERR_NOT_IN_RANGE) {
+                    this.moveCreep(creep, buildingToDismantle.pos);
+                }
+                else {
+                    if (dismantleResult !== OK) {
+                        Log.Alert(`${creep.name} in ${creep.room.name} encountered a ${dismantleResult} error while attempting to dismantle ${buildingToDismantle.structureType} - ${buildingToDismantle.id}`);
+                    }
+                }
+            }
+        }
+    }
+};
+DismantleEnemyBuildingsCreep = __decorate([
+    profile
+], DismantleEnemyBuildingsCreep);
 
 let FactoryEngineerCreep = class FactoryEngineerCreep extends BaseCreep {
     constructor(creep) {
@@ -1325,7 +1548,6 @@ let ReserveRoomCreep = class ReserveRoomCreep extends BaseCreep {
         this.runCreep(creep);
     }
     runCreep(creep) {
-        var _a;
         this.moveHome(creep);
         if (creep.memory.status === "working") {
             if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
@@ -1335,12 +1557,35 @@ let ReserveRoomCreep = class ReserveRoomCreep extends BaseCreep {
                     if (controllerToReserveId) {
                         const controllerToReserve = Game.getObjectById(controllerToReserveId);
                         if (controllerToReserve) {
-                            const reserveResult = creep.reserveController(controllerToReserve);
-                            if (reserveResult === ERR_NOT_IN_RANGE) {
-                                this.moveCreep(creep, controllerToReserve.pos);
+                            let recycleCreep = false;
+                            if (creep.ticksToLive && controllerToReserve.upgradeBlocked) {
+                                if (creep.ticksToLive < controllerToReserve.upgradeBlocked) {
+                                    recycleCreep = true;
+                                }
                             }
-                            else if (reserveResult === ERR_NOT_OWNER) {
-                                if (((_a = controllerToReserve.owner) === null || _a === void 0 ? void 0 : _a.username) === "Invader") {
+                            if (recycleCreep) {
+                                const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
+                                if (closestSpawn) {
+                                    const recycleResult = closestSpawn.recycleCreep(creep);
+                                    if (recycleResult === ERR_NOT_IN_RANGE) {
+                                        this.moveCreep(creep, closestSpawn.pos);
+                                    }
+                                    else {
+                                        if (recycleResult === OK) {
+                                            Log.Debug(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`);
+                                        }
+                                        else {
+                                            Log.Warning(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`);
+                                        }
+                                    }
+                                }
+                            }
+                            else {
+                                const reserveResult = creep.reserveController(controllerToReserve);
+                                if (reserveResult === ERR_NOT_IN_RANGE) {
+                                    this.moveCreep(creep, controllerToReserve.pos);
+                                }
+                                else if (reserveResult === ERR_INVALID_TARGET) {
                                     const attackControllerResult = creep.attackController(controllerToReserve);
                                     if (attackControllerResult === ERR_NOT_IN_RANGE) {
                                         this.moveCreep(creep, controllerToReserve.pos);
@@ -1349,9 +1594,9 @@ let ReserveRoomCreep = class ReserveRoomCreep extends BaseCreep {
                                         Log.Warning(`Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`);
                                     }
                                 }
-                            }
-                            else if (reserveResult !== OK) {
-                                Log.Warning(`Reserve Result for ${creep.name} in ${creep.pos.roomName}: ${reserveResult}`);
+                                else if (reserveResult !== OK) {
+                                    Log.Warning(`Reserve Result for ${creep.name} in ${creep.pos.roomName}: ${reserveResult}`);
+                                }
                             }
                         }
                     }
@@ -1386,33 +1631,36 @@ let SourceMinerCreep = class SourceMinerCreep extends BaseCreep {
         this.runCreep(creep);
     }
     runCreep(creep) {
-        if (creep.memory.sourceId) {
-            this.checkIfFull(creep, RESOURCE_ENERGY);
-            if (creep.memory.status === "fetchingResource") {
-                const source = Game.getObjectById(creep.memory.sourceId);
-                if (source) {
-                    this.harvestSource(creep, source);
+        this.moveHome(creep);
+        if (creep.memory.status === "fetchingResource" || creep.memory.status === "working") {
+            if (creep.memory.sourceId) {
+                this.checkIfFull(creep, RESOURCE_ENERGY);
+                if (creep.memory.status === "fetchingResource") {
+                    const source = Game.getObjectById(creep.memory.sourceId);
+                    if (source) {
+                        this.harvestSource(creep, source);
+                    }
                 }
-            }
-            else if (creep.memory.status === "working") {
-                let dropEnergy = false;
-                if (creep.room.memory.monitoring.structures.storage) {
-                    const storage = Game.getObjectById(creep.room.memory.monitoring.structures.storage.id);
-                    if (storage) {
-                        dropEnergy = false;
+                else if (creep.memory.status === "working") {
+                    let dropEnergy = false;
+                    if (creep.room.memory.monitoring.structures.storage) {
+                        const storage = Game.getObjectById(creep.room.memory.monitoring.structures.storage.id);
+                        if (storage) {
+                            dropEnergy = false;
+                        }
+                        else
+                            dropEnergy = true;
                     }
                     else
                         dropEnergy = true;
-                }
-                else
-                    dropEnergy = true;
-                if (dropEnergy === true) {
-                    creep.drop(RESOURCE_ENERGY);
-                }
-                else if (creep.room.memory.monitoring.structures.storage) {
-                    const storage = Game.getObjectById(creep.room.memory.monitoring.structures.storage.id);
-                    if (storage) {
-                        this.depositResource(creep, storage, RESOURCE_ENERGY);
+                    if (dropEnergy === true) {
+                        creep.drop(RESOURCE_ENERGY);
+                    }
+                    else if (creep.room.memory.monitoring.structures.storage) {
+                        const storage = Game.getObjectById(creep.room.memory.monitoring.structures.storage.id);
+                        if (storage) {
+                            this.depositResource(creep, storage, RESOURCE_ENERGY);
+                        }
                     }
                 }
             }
@@ -1422,6 +1670,22 @@ let SourceMinerCreep = class SourceMinerCreep extends BaseCreep {
 SourceMinerCreep = __decorate([
     profile
 ], SourceMinerCreep);
+
+let TankRoomCreep = class TankRoomCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.moveHome(creep);
+        if (creep.memory.status === "working") {
+            this.moveCreep(creep, findPath.findClearTerrain(creep.memory.room));
+        }
+    }
+};
+TankRoomCreep = __decorate([
+    profile
+], TankRoomCreep);
 
 let TerminalEngineerCreep = class TerminalEngineerCreep extends BaseCreep {
     constructor(creep) {
@@ -1538,7 +1802,10 @@ let UpgradeControllerCreep = class UpgradeControllerCreep extends BaseCreep {
     }
     runCreep(creep) {
         this.boostBodyParts(creep, WORK, RESOURCE_CATALYZED_GHODIUM_ACID);
-        this.checkIfFull(creep, RESOURCE_ENERGY);
+        this.moveHome(creep);
+        if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
+            this.checkIfFull(creep, RESOURCE_ENERGY);
+        }
         if (creep.memory.status === "fetchingResource") {
             this.fetchSource(creep);
         }
@@ -1600,8 +1867,14 @@ class CreepOperator {
                 case "scoutRoom":
                     new ScoutRoomCreep(creepToOperate);
                     break;
+                case "tankRoom":
+                    new TankRoomCreep(creepToOperate);
+                    break;
                 case "claimRoom":
                     new ClaimRoomCreep(creepToOperate);
+                    break;
+                case "defendRoom":
+                    new DefendRoomCreep(creepToOperate);
                     break;
                 case "reserveRoom":
                     new ReserveRoomCreep(creepToOperate);
@@ -1614,6 +1887,9 @@ class CreepOperator {
                     break;
                 case "factoryEngineer":
                     new FactoryEngineerCreep(creepToOperate);
+                    break;
+                case "dismantleEnemyBuildings":
+                    new DismantleEnemyBuildingsCreep(creepToOperate);
                     break;
                 default:
                     Log.Alert(
@@ -1683,8 +1959,10 @@ let FactoryOperator = class FactoryOperator {
                     if (factoryMemory) {
                         const factory = Game.getObjectById(factoryMemory.id);
                         if (factory) {
-                            this.manageFactoryJobs(factory);
-                            this.maintainFactoryEngineerJobs(factory);
+                            if (factory.my) {
+                                this.manageFactoryJobs(factory);
+                                this.maintainFactoryEngineerJobs(factory);
+                            }
                         }
                     }
                 }
@@ -1818,7 +2096,9 @@ let LabOperator = class LabOperator {
                     const labId = labIdString;
                     const lab = Game.getObjectById(labId);
                     if (lab) {
-                        this.manageLabJobs(lab);
+                        if (lab.my) {
+                            this.manageLabJobs(lab);
+                        }
                     }
                 });
                 this.maintainLabEngineerJobs(roomName);
@@ -1968,8 +2248,10 @@ let LinkOperator = class LinkOperator {
                     const link = Game.getObjectById(linkId);
                     const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
                     if (linkMode === "tx" && link) {
-                        this.createLinkFeederJob(link);
-                        this.transmitEnergy(link);
+                        if (link.my) {
+                            this.createLinkFeederJob(link);
+                            this.transmitEnergy(link);
+                        }
                     }
                 });
             }
@@ -2025,7 +2307,10 @@ const creepBodyParts = {
         upgradeController: [WORK, WORK, CARRY, MOVE],
         buildConstructionSite: [WORK, WORK, CARRY, MOVE],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
+        defendRoom: [MOVE, MOVE, ATTACK, ATTACK],
+        tankRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+        dismantleEnemyBuildings: [MOVE],
         reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
     },
     2: {
@@ -2043,7 +2328,10 @@ const creepBodyParts = {
         upgradeController: [WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE],
         buildConstructionSite: [WORK, WORK, WORK, MOVE, MOVE, CARRY, CARRY, MOVE],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
+        defendRoom: [MOVE, MOVE, MOVE, MOVE, ATTACK, ATTACK, ATTACK, ATTACK],
+        tankRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+        dismantleEnemyBuildings: [MOVE],
         reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
     },
     3: {
@@ -2146,7 +2434,10 @@ const creepBodyParts = {
         upgradeController: [WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         buildConstructionSite: [WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
+        defendRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK],
+        tankRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+        dismantleEnemyBuildings: [MOVE],
         reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
     },
     4: {
@@ -2370,7 +2661,31 @@ const creepBodyParts = {
             MOVE
         ],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
+        defendRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK
+        ],
+        tankRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+        dismantleEnemyBuildings: [MOVE],
         reserveRoom: [MOVE, MOVE, CLAIM, CLAIM]
     },
     5: {
@@ -2672,7 +2987,79 @@ const creepBodyParts = {
             CARRY
         ],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
+        defendRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL
+        ],
+        tankRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE
+        ],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+        dismantleEnemyBuildings: [MOVE],
         reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
     },
     6: {
@@ -3048,7 +3435,84 @@ const creepBodyParts = {
             CARRY
         ],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
+        defendRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL
+        ],
+        tankRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE
+        ],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+        dismantleEnemyBuildings: [MOVE],
         reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
     },
     7: {
@@ -3474,8 +3938,181 @@ const creepBodyParts = {
             CARRY
         ],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
+        defendRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL
+        ],
+        tankRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE
+        ],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
+        dismantleEnemyBuildings: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK
+        ],
+        reserveRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            CLAIM,
+            CLAIM,
+            CLAIM,
+            CLAIM,
+            CLAIM,
+            CLAIM,
+            CLAIM,
+            CLAIM
+        ]
     },
     8: {
         // Second level is the jobType.
@@ -3900,8 +4537,181 @@ const creepBodyParts = {
             CARRY
         ],
         scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
+        defendRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL
+        ],
+        tankRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            TOUGH,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE
+        ],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
+        dismantleEnemyBuildings: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK
+        ],
+        reserveRoom: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            CLAIM,
+            CLAIM,
+            CLAIM,
+            CLAIM,
+            CLAIM,
+            CLAIM,
+            CLAIM,
+            CLAIM
+        ]
     }
 };
 
@@ -4186,10 +4996,13 @@ function creepPriority(room) {
         feedLink: 9,
         reserveRoom: 10,
         claimRoom: 11,
-        buildConstructionSite: 12,
-        terminalEngineer: 13,
-        labEngineer: 14,
-        factoryEngineer: 15
+        defendRoom: 12,
+        buildConstructionSite: 13,
+        terminalEngineer: 14,
+        labEngineer: 15,
+        factoryEngineer: 16,
+        tankRoom: 17,
+        dismantleEnemyBuildings: 18
     };
     if (room) {
         let storageContainsEnergy = false;
@@ -4218,13 +5031,16 @@ function creepPriority(room) {
                 scoutRoom: priority.scoutRoom,
                 reserveRoom: priority.reserveRoom,
                 claimRoom: priority.claimRoom,
+                defendRoom: priority.defendRoom,
                 buildConstructionSite: priority.buildConstructionSite,
                 feedLink: priority.feedLink,
                 workTerminal: priority.workTerminal,
                 lootResource: priority.lootResource,
                 terminalEngineer: priority.terminalEngineer,
                 labEngineer: priority.labEngineer,
-                factoryEngineer: priority.factoryEngineer
+                factoryEngineer: priority.factoryEngineer,
+                tankRoom: priority.tankRoom,
+                dismantleEnemyBuildings: priority.dismantleEnemyBuildings
             };
         }
     }
@@ -4421,9 +5237,9 @@ class ScoutRoomJob {
     }
 }
 
-const roomsToClaim = [];
+const roomsToClaim = ["W55N12"];
 
-const roomsToMine = ["W56N11"];
+const roomsToMine = ["W56N11", "W55N11"];
 
 const roomOperations = {
     generateRoomsArray(roomOperation) {
@@ -4462,12 +5278,165 @@ const roomOperations = {
     }
 };
 
+class TankRoomJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "TankRoomJob" for Room ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: this.JobParameters.status,
+                    room: this.JobParameters.room,
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    jobType: "tankRoom"
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "tankRoom",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "TankRoomJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+const roomsToTank = [];
+
+class DefendRoomJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "DefendRoomJob" for Room ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: this.JobParameters.status,
+                    room: this.JobParameters.room,
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    jobType: "defendRoom"
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "defendRoom",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "DefendRoomJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+const roomsToDismantleEnemyBuildings = [];
+
+class DismantleEnemyBuildingsJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "DismantleEnemyBuildingsJob" for Room ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: this.JobParameters.status,
+                    room: this.JobParameters.room,
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    jobType: "dismantleEnemyBuildings"
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "dismantleEnemyBuildings",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "DismantleEnemyBuildingsJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
 let RoomOperator = class RoomOperator {
     constructor() {
+        this.maintainTankRoomJobs();
+        this.maintainDismantleEnemyBuildingsJobs();
         const roomsToOperate = roomOperations.generateRoomsArray();
-        //
         roomsToOperate.forEach(roomName => {
-            var _a, _b;
+            var _a, _b, _c, _d;
+            this.maintainDefendRoomJobs(roomName);
             // console.log(`${Game.time.toString()} - ${roomName}`);
             const room = Game.rooms[roomName];
             if (room) {
@@ -4480,7 +5449,14 @@ let RoomOperator = class RoomOperator {
                         }
                         if (roomOperations.generateRoomsArray("mine").includes(roomName)) {
                             if (!(((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.reservation) === null || _b === void 0 ? void 0 : _b.username) === myScreepsUsername)) {
-                                this.createReserveRoomJob(roomName);
+                                if ((_c = room.controller) === null || _c === void 0 ? void 0 : _c.upgradeBlocked) {
+                                    if (((_d = room.controller) === null || _d === void 0 ? void 0 : _d.upgradeBlocked) < 600) {
+                                        this.createReserveRoomJob(roomName);
+                                    }
+                                }
+                                else {
+                                    this.createReserveRoomJob(roomName);
+                                }
                             }
                         }
                     }
@@ -4501,6 +5477,66 @@ let RoomOperator = class RoomOperator {
         };
         new ScoutRoomJob(jobParameters);
     }
+    maintainTankRoomJobs() {
+        roomsToTank.forEach(roomName => {
+            const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+            const jobParameters = {
+                jobType: "tankRoom",
+                status: "movingIntoRoom",
+                room: roomName,
+                spawnRoom
+            };
+            new TankRoomJob(jobParameters, creepNumbers[jobParameters.jobType]);
+        });
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobQueueEntry]) => jobQueueEntry.jobType === "tankRoom")
+            .forEach(([jobQueueUUID, jobQueueEntry]) => {
+            if (!roomsToTank.includes(jobQueueEntry.room)) {
+                delete Memory.queues.jobQueue[jobQueueUUID];
+            }
+        });
+    }
+    maintainDismantleEnemyBuildingsJobs() {
+        roomsToDismantleEnemyBuildings.forEach(roomName => {
+            const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+            const jobParameters = {
+                jobType: "dismantleEnemyBuildings",
+                status: "movingIntoRoom",
+                room: roomName,
+                spawnRoom
+            };
+            new DismantleEnemyBuildingsJob(jobParameters, creepNumbers[jobParameters.jobType]);
+        });
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobQueueEntry]) => jobQueueEntry.jobType === "dismantleEnemyBuildings")
+            .forEach(([jobQueueUUID, jobQueueEntry]) => {
+            if (!roomsToDismantleEnemyBuildings.includes(jobQueueEntry.room)) {
+                delete Memory.queues.jobQueue[jobQueueUUID];
+            }
+        });
+    }
+    maintainDefendRoomJobs(roomName) {
+        if (Memory.rooms[roomName]) {
+            const roomHostileCount = Object.entries(Memory.rooms[roomName].monitoring.hostiles);
+            if (roomHostileCount.length > 0) {
+                const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+                const jobParameters = {
+                    jobType: "defendRoom",
+                    status: "movingIntoRoom",
+                    room: roomName,
+                    spawnRoom
+                };
+                new DefendRoomJob(jobParameters);
+            }
+            else {
+                Object.entries(Memory.queues.jobQueue)
+                    .filter(([, jobQueueEntry]) => jobQueueEntry.jobType === "defendRoom" && jobQueueEntry.room === roomName)
+                    .forEach(([jobQueueUUID]) => {
+                    delete Memory.queues.jobQueue[jobQueueUUID];
+                });
+            }
+        }
+    }
     createClaimRoomJob(roomName) {
         const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
         const jobParameters = {
@@ -4512,6 +5548,27 @@ let RoomOperator = class RoomOperator {
         new ClaimRoomJob(jobParameters);
     }
     createReserveRoomJob(roomName) {
+        let postponeCreate = false;
+        const room = Game.rooms[roomName];
+        if (room) {
+            if (room.controller) {
+                if (room.controller.upgradeBlocked) {
+                    if (room.controller.upgradeBlocked > 600) {
+                        postponeCreate = true;
+                    }
+                    if (room.controller.reservation) {
+                        if (room.controller.reservation.username === myScreepsUsername) {
+                            if (room.controller.reservation.ticksToEnd > 1500) {
+                                postponeCreate = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            postponeCreate = true;
+        }
         const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
         const jobParameters = {
             jobType: "reserveRoom",
@@ -4519,7 +5576,12 @@ let RoomOperator = class RoomOperator {
             room: roomName,
             spawnRoom
         };
-        new ReserveRoomJob(jobParameters);
+        if (!postponeCreate) {
+            new ReserveRoomJob(jobParameters);
+        }
+        else {
+            new ReserveRoomJob(jobParameters, 0);
+        }
     }
 };
 RoomOperator = __decorate([
@@ -4862,8 +5924,10 @@ let TerminalOperator = class TerminalOperator {
                 const room = Game.rooms[roomName];
                 if (room) {
                     if (room.terminal) {
-                        this.manageTerminalJobs(room.terminal);
-                        this.maintainTerminalEngineerJobs(room.terminal);
+                        if (room.terminal.my) {
+                            this.manageTerminalJobs(room.terminal);
+                            this.maintainTerminalEngineerJobs(room.terminal);
+                        }
                     }
                 }
             });
@@ -4966,45 +6030,6 @@ class FeedTowerJob {
     }
 }
 
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-function fetchHostileCreep(room) {
-    const cachedHostiles = Object.entries(room.memory.monitoring.hostiles);
-    if (cachedHostiles.length === 1) {
-        const hostileIdUnknown = cachedHostiles[0][0];
-        const hostileId = hostileIdUnknown;
-        const hostile = Game.getObjectById(hostileId);
-        if (hostile) {
-            return hostile;
-        }
-    }
-    else {
-        if (cachedHostiles.length > 1) {
-            const cachedHostilesThatHeal = cachedHostiles.filter(([, cachedHostileMemory]) => cachedHostileMemory.bodyParts.includes(HEAL) === true);
-            if (cachedHostilesThatHeal.length === 1) {
-                const hostileIdUnknown = cachedHostilesThatHeal[0][0];
-                const hostileId = hostileIdUnknown;
-                const hostile = Game.getObjectById(hostileId);
-                if (hostile) {
-                    return hostile;
-                }
-            }
-            else {
-                if (cachedHostilesThatHeal.length > 1) {
-                    const cachedHostilesThatHealLowestHP = cachedHostiles.sort(([, cachedHostileMemoryA], [, cachedHostileMemoryB]) => cachedHostileMemoryA.health.hits - cachedHostileMemoryB.health.hits);
-                    const hostileIdUnknown = cachedHostilesThatHealLowestHP[0][0];
-                    const hostileId = hostileIdUnknown;
-                    const hostile = Game.getObjectById(hostileId);
-                    if (hostile) {
-                        return hostile;
-                    }
-                }
-            }
-        }
-    }
-    return undefined;
-}
-
 let TowerOperator = class TowerOperator {
     constructor() {
         if (Memory.rooms) {
@@ -5015,8 +6040,10 @@ let TowerOperator = class TowerOperator {
                         const towerId = towerIdString;
                         const tower = Game.getObjectById(towerId);
                         if (tower) {
-                            this.createTowerFeederJob(tower);
-                            this.operateTowers(tower);
+                            if (tower.my) {
+                                this.createTowerFeederJob(tower);
+                                this.operateTowers(tower);
+                            }
                         }
                     });
                 }
@@ -5131,17 +6158,6 @@ class Operator {
     }
 }
 
-const garbageCollect = {
-    creeps() {
-        for (const name in Memory.creeps) {
-            if (!(name in Game.creeps)) {
-                Log.Debug(`Clearing ${name} Creep Memory`);
-                delete Memory.creeps[name];
-            }
-        }
-    }
-};
-
 let ConstructionSiteMonitor = class ConstructionSiteMonitor {
     constructor(room) {
         this.room = room;
@@ -5250,8 +6266,12 @@ let DroppedResourceMonitor = class DroppedResourceMonitor {
     createLootResourceJob() {
         if (this.room.memory.monitoring.structures.storage) {
             if (Object.entries(this.room.memory.monitoring.droppedResources).length > 0) {
+                let spawnRoom = this.room.name;
+                if (Object.entries(Memory.rooms[this.room.name].monitoring.structures.spawns).length === 0) {
+                    spawnRoom = findPath.findClosestSpawnToRoom(this.room.name).pos.roomName;
+                }
                 const jobParameters = {
-                    room: this.room.name,
+                    room: spawnRoom,
                     status: "fetchingResource",
                     jobType: "lootResource"
                 };
@@ -5570,6 +6590,7 @@ LabMonitor = __decorate([
 const linkConfig = {
     W56N12: {
         "6397f1bd30238608dae79135": "tx",
+        "63b5d422245b4f17984d7ec3": "tx",
         "639b23129ab55f8634547d74": "rx",
         "63a3c1f82064b45cf37c59d8": "rx"
     }
@@ -5663,6 +6684,7 @@ let SpawnMonitor = class SpawnMonitor {
         }
         if (spawn.room.memory.monitoring.structures.spawns) {
             spawn.room.memory.monitoring.structures.spawns[spawn.name] = {
+                id: spawn.id,
                 energy: {
                     energyAvailable: spawn.store[RESOURCE_ENERGY],
                     energyCapacity: spawn.store.getCapacity(RESOURCE_ENERGY)
@@ -5774,6 +6796,18 @@ class StructureMonitor {
     }
     monitorStructures() {
         if (this.room) {
+            this.room.memory.monitoring.structures = {
+                spawns: {},
+                extensions: {},
+                extractors: {},
+                roads: {},
+                towers: {},
+                links: {},
+                containers: {},
+                labs: {},
+                walls: {},
+                other: {}
+            };
             // console.log(JSON.stringify(this.room.find(FIND_STRUCTURES)));
             this.room.find(FIND_STRUCTURES).forEach(Structure => {
                 switch (Structure.structureType) {
@@ -5837,6 +6871,9 @@ class RoomMonitor {
                     this.runChildMonitors();
                 }
                 if (this.room.controller.my) {
+                    this.runChildMonitors();
+                }
+                if (roomsToClaim.includes(this.roomName) || roomsToMine.includes(this.roomName)) {
                     this.runChildMonitors();
                 }
             }
@@ -6019,9 +7056,23 @@ class MemoryController {
     maintainMemory() {
         this.maintainQueueMemory();
         this.maintainRoomMemory();
+        this.maintainCreepMemory();
     }
     maintainQueueMemory() {
         new QueueMemoryController();
+    }
+    maintainCreepMemory() {
+        if (!Memory.creeps) {
+            Memory.creeps = {};
+        }
+        else {
+            for (const name in Memory.creeps) {
+                if (!(name in Game.creeps)) {
+                    Log.Debug(`Clearing ${name} Creep Memory`);
+                    delete Memory.creeps[name];
+                }
+            }
+        }
     }
     maintainRoomMemory() {
         if (!Memory.rooms) {
@@ -6038,7 +7089,7 @@ class MemoryController {
 global.Profiler = init();
 const loop = () => {
     Log.Informational(`Current game tick is ${Game.time}`);
-    garbageCollect.creeps();
+    // garbageCollect.creeps();
     new MemoryController();
     new Monitor();
     new Operator();

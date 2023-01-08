@@ -1,6 +1,7 @@
 import { profile } from "Profiler";
 import { LootResourceJob } from "classes/Job/LootResourceJob";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
+import { findPath } from "common/findPath";
 
 @profile
 export class DroppedResourceMonitor {
@@ -39,8 +40,12 @@ export class DroppedResourceMonitor {
   private createLootResourceJob(): void {
     if (this.room.memory.monitoring.structures.storage) {
       if (Object.entries(this.room.memory.monitoring.droppedResources).length > 0) {
+        let spawnRoom = this.room.name;
+        if (Object.entries(Memory.rooms[this.room.name].monitoring.structures.spawns).length === 0) {
+          spawnRoom = findPath.findClosestSpawnToRoom(this.room.name).pos.roomName;
+        }
         const jobParameters: LootResourceJobParameters = {
-          room: this.room.name,
+          room: spawnRoom,
           status: "fetchingResource",
           jobType: "lootResource"
         };

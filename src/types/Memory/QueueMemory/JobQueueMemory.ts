@@ -13,12 +13,16 @@ declare global {
         | BuildConstructionSiteJobParameters
         | LootResourceJobParameters
         | ScoutRoomJobParameters
+        | TankRoomJobParameters
         | ClaimRoomJobParameters
         | ReserveRoomJobParameters
         | TransportResourceJobParameters
         | TerminalEngineerJobParameters
         | LabEngineerJobParameters
-        | FactoryEngineerJobParameters;
+        | FactoryEngineerJobParameters
+        | DefendRoomJobParameters
+        | DismantleEnemyBuildingsJobParameters;
+
       jobType: string;
       timeAdded: Game["time"];
       assignedCreep?: Id<Creep>;

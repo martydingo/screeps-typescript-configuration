@@ -12,12 +12,15 @@ declare global {
       | "buildConstructionSite"
       | "lootResource"
       | "scoutRoom"
+      | "tankRoom"
       | "claimRoom"
       | "reserveRoom"
       | "transportResource"
       | "terminalEngineer"
       | "labEngineer"
-      | "factoryEngineer";
+      | "factoryEngineer"
+      | "defendRoom"
+      | "dismantleEnemyBuildings";
     sourceId?: Id<Source>;
     towerId?: Id<StructureTower>;
     controllerId?: Id<StructureController>;

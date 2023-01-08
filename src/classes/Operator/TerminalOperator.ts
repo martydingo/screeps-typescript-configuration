@@ -11,8 +11,10 @@ export class TerminalOperator {
         const room = Game.rooms[roomName];
         if (room) {
           if (room.terminal) {
-            this.manageTerminalJobs(room.terminal);
-            this.maintainTerminalEngineerJobs(room.terminal);
+            if (room.terminal.my) {
+              this.manageTerminalJobs(room.terminal);
+              this.maintainTerminalEngineerJobs(room.terminal);
+            }
           }
         }
       });
