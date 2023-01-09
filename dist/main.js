@@ -726,7 +726,23 @@ const movePathColors = {
 
 let BaseCreep = class BaseCreep {
     constructor(creep) {
-        //
+        if (creep.memory.status === "recyclingCreep") {
+            const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
+            if (closestSpawn) {
+                const recycleResult = closestSpawn.recycleCreep(creep);
+                if (recycleResult === ERR_NOT_IN_RANGE) {
+                    this.moveCreep(creep, closestSpawn.pos);
+                }
+                else {
+                    if (recycleResult === OK) {
+                        Log.Debug(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`);
+                    }
+                    else {
+                        Log.Warning(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`);
+                    }
+                }
+            }
+        }
     }
     checkIfFull(creep, resource) {
         if (creep.memory.status === "fetchingResource") {
@@ -815,13 +831,6 @@ let BaseCreep = class BaseCreep {
                 if (!creep.memory.safeRoute) {
                     creep.memory.safeRoute = this.fetchSafePath(creep, creep.memory.room);
                 }
-                if (creep.memory.safeRoute[1]) {
-                    if (creep.pos.roomName === creep.memory.safeRoute[0].roomName) {
-                        delete creep.memory.safeRoute[0];
-                        creep.memory.safeRoute[0] = creep.memory.safeRoute[1];
-                        delete creep.memory.safeRoute[1];
-                    }
-                }
                 this.moveCreep(creep, creep.memory.safeRoute[0]);
             }
         }
@@ -840,17 +849,32 @@ let BaseCreep = class BaseCreep {
         return safeRoute;
     }
     moveCreep(creep, destination) {
-        let nextDestination = destination;
+        let nextDestination = new RoomPosition(destination.x, destination.y, destination.roomName);
         if (creep.pos.roomName !== destination.roomName) {
             if (!creep.memory.safeRoute) {
                 creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
             }
         }
-        else {
-            delete creep.memory.safeRoute;
-        }
         if (creep.memory.safeRoute) {
-            nextDestination = new RoomPosition(creep.memory.safeRoute[0].x, creep.memory.safeRoute[0].y, creep.memory.safeRoute[0].roomName);
+            if (Object.entries(creep.memory.safeRoute).length > 1) {
+                if (creep.memory.safeRoute[0].roomName === creep.pos.roomName) {
+                    const newCreepSafeRouteMemory = Object.entries(creep.memory.safeRoute).splice(0, 1);
+                    const creepSafeRouteArray = [];
+                    newCreepSafeRouteMemory.forEach(([, safeRouteRoomPosition]) => {
+                        creepSafeRouteArray.push(safeRouteRoomPosition);
+                    });
+                    creep.memory.safeRoute = creepSafeRouteArray;
+                    nextDestination = new RoomPosition(creep.memory.safeRoute[0].x, creep.memory.safeRoute[0].y, creep.memory.safeRoute[0].roomName);
+                }
+            }
+            if (Object.entries(creep.memory.safeRoute).length === 1) {
+                if (creep.pos.roomName === creep.memory.safeRoute[0].roomName) {
+                    delete creep.memory.safeRoute;
+                }
+                else {
+                    nextDestination = new RoomPosition(creep.memory.safeRoute[0].x, creep.memory.safeRoute[0].y, creep.memory.safeRoute[0].roomName);
+                }
+            }
         }
         const moveResult = creep.moveTo(nextDestination, {
             visualizePathStyle: {
@@ -1184,25 +1208,15 @@ let DefendRoomCreep = class DefendRoomCreep extends BaseCreep {
                 this.healCreep(creep);
             }
         }
-        this.moveHome(creep);
-        if (creep.memory.status === "working") {
-            const hostileCreep = fetchHostileCreep(creep.room);
-            if (hostileCreep) {
-                this.attackCreep(creep, hostileCreep);
-            }
-            else {
-                const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
-                const recycleResult = closestSpawn.recycleCreep(creep);
-                if (recycleResult === ERR_NOT_IN_RANGE) {
-                    this.moveCreep(creep, closestSpawn.pos);
+        if (creep.memory.status !== "recyclingCreep") {
+            this.moveHome(creep);
+            if (creep.memory.status === "working") {
+                const hostileCreep = fetchHostileCreep(creep.room);
+                if (hostileCreep) {
+                    this.attackCreep(creep, hostileCreep);
                 }
                 else {
-                    if (recycleResult === OK) {
-                        Log.Debug(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`);
-                    }
-                    else {
-                        Log.Warning(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`);
-                    }
+                    creep.memory.status = "recyclingCreep";
                 }
             }
         }
@@ -1548,7 +1562,10 @@ let ReserveRoomCreep = class ReserveRoomCreep extends BaseCreep {
         this.runCreep(creep);
     }
     runCreep(creep) {
-        this.moveHome(creep);
+        this.checkIfRecyclable(creep);
+        if (creep.memory.status !== "recyclingCreep") {
+            this.moveHome(creep);
+        }
         if (creep.memory.status === "working") {
             if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
                 const controllerToReserveMemory = Memory.rooms[creep.memory.room].monitoring.structures.controller;
@@ -1557,46 +1574,39 @@ let ReserveRoomCreep = class ReserveRoomCreep extends BaseCreep {
                     if (controllerToReserveId) {
                         const controllerToReserve = Game.getObjectById(controllerToReserveId);
                         if (controllerToReserve) {
-                            let recycleCreep = false;
-                            if (creep.ticksToLive && controllerToReserve.upgradeBlocked) {
-                                if (creep.ticksToLive < controllerToReserve.upgradeBlocked) {
-                                    recycleCreep = true;
-                                }
+                            const reserveResult = creep.reserveController(controllerToReserve);
+                            if (reserveResult === ERR_NOT_IN_RANGE) {
+                                this.moveCreep(creep, controllerToReserve.pos);
                             }
-                            if (recycleCreep) {
-                                const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
-                                if (closestSpawn) {
-                                    const recycleResult = closestSpawn.recycleCreep(creep);
-                                    if (recycleResult === ERR_NOT_IN_RANGE) {
-                                        this.moveCreep(creep, closestSpawn.pos);
-                                    }
-                                    else {
-                                        if (recycleResult === OK) {
-                                            Log.Debug(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`);
-                                        }
-                                        else {
-                                            Log.Warning(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`);
-                                        }
-                                    }
-                                }
-                            }
-                            else {
-                                const reserveResult = creep.reserveController(controllerToReserve);
-                                if (reserveResult === ERR_NOT_IN_RANGE) {
+                            else if (reserveResult === ERR_INVALID_TARGET) {
+                                const attackControllerResult = creep.attackController(controllerToReserve);
+                                if (attackControllerResult === ERR_NOT_IN_RANGE) {
                                     this.moveCreep(creep, controllerToReserve.pos);
                                 }
-                                else if (reserveResult === ERR_INVALID_TARGET) {
-                                    const attackControllerResult = creep.attackController(controllerToReserve);
-                                    if (attackControllerResult === ERR_NOT_IN_RANGE) {
-                                        this.moveCreep(creep, controllerToReserve.pos);
-                                    }
-                                    else {
-                                        Log.Warning(`Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`);
-                                    }
+                                else {
+                                    Log.Warning(`Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`);
                                 }
-                                else if (reserveResult !== OK) {
-                                    Log.Warning(`Reserve Result for ${creep.name} in ${creep.pos.roomName}: ${reserveResult}`);
-                                }
+                            }
+                            else if (reserveResult !== OK) {
+                                Log.Warning(`Reserve Result for ${creep.name} in ${creep.pos.roomName}: ${reserveResult}`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    checkIfRecyclable(creep) {
+        if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
+            const controllerToReserveMemory = Memory.rooms[creep.memory.room].monitoring.structures.controller;
+            if (controllerToReserveMemory) {
+                const controllerToReserveId = controllerToReserveMemory.id;
+                if (controllerToReserveId) {
+                    const controllerToReserve = Game.getObjectById(controllerToReserveId);
+                    if (controllerToReserve) {
+                        if (creep.ticksToLive && controllerToReserve.upgradeBlocked) {
+                            if (creep.ticksToLive < controllerToReserve.upgradeBlocked) {
+                                creep.memory.status = "recyclingCreep";
                             }
                         }
                     }
@@ -5450,7 +5460,7 @@ let RoomOperator = class RoomOperator {
                         if (roomOperations.generateRoomsArray("mine").includes(roomName)) {
                             if (!(((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.reservation) === null || _b === void 0 ? void 0 : _b.username) === myScreepsUsername)) {
                                 if ((_c = room.controller) === null || _c === void 0 ? void 0 : _c.upgradeBlocked) {
-                                    if (((_d = room.controller) === null || _d === void 0 ? void 0 : _d.upgradeBlocked) < 600) {
+                                    if (((_d = room.controller) === null || _d === void 0 ? void 0 : _d.upgradeBlocked) < 150) {
                                         this.createReserveRoomJob(roomName);
                                     }
                                 }

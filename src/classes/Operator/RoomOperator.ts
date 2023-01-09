@@ -34,7 +34,7 @@ export class RoomOperator {
             if (roomOperations.generateRoomsArray("mine").includes(roomName)) {
               if (!(room.controller?.reservation?.username === myScreepsUsername)) {
                 if (room.controller?.upgradeBlocked) {
-                  if (room.controller?.upgradeBlocked < 600) {
+                  if (room.controller?.upgradeBlocked < 150) {
                     this.createReserveRoomJob(roomName);
                   }
                 } else {

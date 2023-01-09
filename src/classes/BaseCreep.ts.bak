@@ -130,12 +130,13 @@ export class BaseCreep {
     return safeRoute;
   }
   public moveCreep(creep: Creep, destination: RoomPosition): ScreepsReturnCode {
-    let nextDestination = new RoomPosition(destination.x, destination.y, destination.roomName);
-
+    let nextDestination = destination;
     if (creep.pos.roomName !== destination.roomName) {
       if (!creep.memory.safeRoute) {
         creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
       }
+    } else {
+      delete creep.memory.safeRoute;
     }
     if (creep.memory.safeRoute) {
       if (Object.entries(creep.memory.safeRoute).length > 1) {
@@ -146,17 +147,9 @@ export class BaseCreep {
             creepSafeRouteArray.push(safeRouteRoomPosition);
           });
           creep.memory.safeRoute = creepSafeRouteArray;
-          nextDestination = new RoomPosition(
-            creep.memory.safeRoute[0].x,
-            creep.memory.safeRoute[0].y,
-            creep.memory.safeRoute[0].roomName
-          );
         }
-      }
-      if (Object.entries(creep.memory.safeRoute).length === 1) {
-        if (creep.pos.roomName === creep.memory.safeRoute[0].roomName) {
-          delete creep.memory.safeRoute;
-        } else {
+      } else {
+        if (Object.entries(creep.memory.safeRoute).length === 1) {
           nextDestination = new RoomPosition(
             creep.memory.safeRoute[0].x,
             creep.memory.safeRoute[0].y,
