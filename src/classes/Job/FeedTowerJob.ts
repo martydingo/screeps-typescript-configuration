@@ -5,16 +5,12 @@ export class FeedTowerJob {
   public JobParameters: FeedTowerJobParameters;
   public constructor(JobParameters: FeedTowerJobParameters, count = 1) {
     this.JobParameters = JobParameters;
-    Object.entries(Memory.queues.jobQueue)
-      .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
-      .forEach(([jobUUID, jobMemory]) => {
-        if (jobMemory.index > count) {
-          this.deleteJob(jobUUID);
-        }
-      });
-    if (count === 1) {
+    if (count === 0) {
       const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.towerId}-1`);
-      this.createJob(UUID, 1);
+      this.deleteJob(UUID);
+    } else if (count === 1) {
+      const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.towerId}-1`);
+      this.createJob(UUID, count);
     } else {
       let iterations = 1;
       while (iterations <= count) {
@@ -46,9 +42,9 @@ export class FeedTowerJob {
   }
   private deleteJob(UUID: string) {
     if (Memory.queues.jobQueue[UUID]) {
-      Log.Informational(
-        `Deleting "FeedTowerJob" for Tower ID "${this.JobParameters.towerId} with the UUID of ${UUID}"`
-      );
+      const jobParameters: FeedTowerJobParameters = Memory.queues.jobQueue[UUID]
+        .jobParameters as FeedTowerJobParameters;
+      Log.Informational(`Deleting "FeedTowerJob" for Tower ID "${jobParameters.towerId} with the UUID of ${UUID}"`);
       delete Memory.queues.jobQueue[UUID];
     }
   }

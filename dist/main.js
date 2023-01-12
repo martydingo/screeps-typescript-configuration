@@ -513,12 +513,41 @@ const creepNumbers = {
     claimRoom: 1,
     defendRoom: 1,
     reserveRoom: 1,
-    transportResource: 2,
+    transportResource: 1,
     terminalEngineer: 1,
     labEngineer: 1,
     factoryEngineer: 1,
     tankRoom: 0,
     dismantleEnemyBuildings: 1
+};
+
+const creepNumbersOverride = {
+    // W00N00: {
+    //   mineSource: 0,
+    //   workTerminal: 0,
+    //   feedSpawn: 0,
+    //   feedTower: 0,
+    //   feedLink: 0,
+    //   buildConstructionSite: 0,
+    //   upgradeController: 0,
+    //   lootResource: 0,
+    //   scoutRoom: 0,
+    //   claimRoom: 0,
+    //   defendRoom: 0,
+    //   reserveRoom: 0,
+    //   transportResource: 0,
+    //   terminalEngineer: 0,
+    //   labEngineer: 0,
+    //   factoryEngineer: 0,
+    //   tankRoom: 0,
+    //   dismantleEnemyBuildings: 0
+    // }
+    W55N12: {
+        lootResource: 1
+    },
+    W56N12: {
+        upgradeController: -1
+    }
 };
 
 let ConstructionSiteOperator = class ConstructionSiteOperator {
@@ -550,7 +579,7 @@ let ConstructionSiteOperator = class ConstructionSiteOperator {
             spawnRoom,
             jobType: "buildConstructionSite"
         };
-        const count = creepNumbers[JobParameters.jobType];
+        const count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[roomName][JobParameters.jobType];
         new BuildConstructionSiteJob(JobParameters, count);
     }
     deleteConstructionSiteJob(roomName) {
@@ -633,32 +662,6 @@ class UpgradeControllerJob {
     }
 }
 
-const creepNumbersOverride = {
-    // W00N00: {
-    //   mineSource: 0,
-    //   workTerminal: 0,
-    //   feedSpawn: 0,
-    //   feedTower: 0,
-    //   feedLink: 0,
-    //   buildConstructionSite: 0,
-    //   upgradeController: 0,
-    //   lootResource: 0,
-    //   scoutRoom: 0,
-    //   claimRoom: 0,
-    //   defendRoom: 0,
-    //   reserveRoom: 0,
-    //   transportResource: 0,
-    //   terminalEngineer: 0,
-    //   labEngineer: 0,
-    //   factoryEngineer: 0,
-    //   tankRoom: 0,
-    //   dismantleEnemyBuildings: 0
-    // }
-    W56N12: {
-        upgradeController: -1
-    }
-};
-
 let ControllerOperator = class ControllerOperator {
     constructor() {
         this.operateController();
@@ -703,1602 +706,13 @@ ControllerOperator = __decorate([
     profile
 ], ControllerOperator);
 
-const movePathColors = {
-    mineSource: "#FFEB3B",
-    workTerminal: "#66BB6A",
-    feedSpawn: "#DCE775",
-    feedTower: "#D4E157",
-    feedLink: "#CDDC39",
-    buildConstructionSite: "#FFB300",
-    dismantleEnemyBuildings: "#FFB300",
-    upgradeController: "#FF5722",
-    lootResource: "#009688",
-    scoutRoom: "#424242",
-    tankRoom: "#646464",
-    claimRoom: "#1A237E",
-    defendRoom: "#B91C1C",
-    reserveRoom: "#5C6BC0",
-    transportResource: "#00897B",
-    terminalEngineer: "#2E7D32",
-    labEngineer: "#03A9F4",
-    factoryEngineer: "#607D8B"
-};
-
-let BaseCreep = class BaseCreep {
-    constructor(creep) {
-        if (creep.memory.status === "recyclingCreep") {
-            const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
-            if (closestSpawn) {
-                const recycleResult = closestSpawn.recycleCreep(creep);
-                if (recycleResult === ERR_NOT_IN_RANGE) {
-                    this.moveCreep(creep, closestSpawn.pos);
-                }
-                else {
-                    if (recycleResult === OK) {
-                        Log.Debug(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`);
-                    }
-                    else {
-                        Log.Warning(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`);
-                    }
-                }
-            }
-        }
-    }
-    checkIfFull(creep, resource) {
-        if (creep.memory.status === "fetchingResource") {
-            if (creep.store.getFreeCapacity(resource) === 0) {
-                if (creep.store.getCapacity(resource) === creep.store[resource]) {
-                    creep.memory.status = "working";
-                }
-                else {
-                    if (creep.store.getFreeCapacity(resource) === 0) {
-                        Object.entries(creep.store).forEach(([resourceType]) => {
-                            if (resourceType !== resource) {
-                                if (resourceType === RESOURCE_ENERGY) {
-                                    if (creep.room.storage) {
-                                        this.depositResource(creep, creep.room.storage, resourceType);
-                                    }
-                                }
-                                else {
-                                    if (creep.room.terminal) {
-                                        this.depositResource(creep, creep.room.terminal, resourceType);
-                                    }
-                                    else {
-                                        creep.drop(resourceType);
-                                    }
-                                }
-                            }
-                        });
-                    }
-                }
-            }
-        }
-        else if (creep.memory.status === "working") {
-            if (creep.store[resource] === 0 && creep.store.getFreeCapacity(resource) > 0) {
-                creep.memory.status = "fetchingResource";
-            }
-        }
-    }
-    boostBodyParts(creep, bodyPart, mineral) {
-        const creepSpecificBodyPartCount = creep.body.filter(creepBodyPart => creepBodyPart.type === bodyPart).length;
-        const creepSpecificBoostedBodyPartCount = creep.body.filter(creepBodyPart => creepBodyPart.type === bodyPart && creepBodyPart.boost === mineral).length;
-        if (creepSpecificBodyPartCount !== creepSpecificBoostedBodyPartCount) {
-            const mineralString = mineral.toString().toUpperCase();
-            const labsWithMineral = Object.entries(creep.room.memory.monitoring.structures.labs).filter(([, labMonitorMemory]) => labMonitorMemory.resources[mineralString]);
-            if (!creep.spawning) {
-                if (labsWithMineral.length > 0) {
-                    const labId = labsWithMineral[0][0];
-                    const lab = Game.getObjectById(labId);
-                    if (lab) {
-                        if (lab.store[RESOURCE_ENERGY] > LAB_ENERGY_CAPACITY / 10) {
-                            creep.memory.status = "fetchingBoosts";
-                            const boostResult = lab.boostCreep(creep);
-                            if (boostResult === ERR_NOT_IN_RANGE) {
-                                this.moveCreep(creep, lab.pos);
-                            }
-                            else {
-                                if (boostResult !== OK) {
-                                    Log.Warning(`${creep.name} in ${creep.room.name} has encountered a ${boostResult} error code while trying to boost bodyparts with the mineral ${mineral}`);
-                                }
-                                else {
-                                    creep.memory.status = "working";
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else {
-            if (creep.memory.status === "fetchingBoosts") {
-                creep.memory.status = "working";
-            }
-        }
-    }
-    moveHome(creep) {
-        if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
-            if (creep.pos.roomName !== creep.memory.room) {
-                creep.memory.status = "movingIntoRoom";
-            }
-        }
-        if (creep.memory.status === "movingIntoRoom") {
-            if (creep.pos.roomName === creep.memory.room) {
-                delete creep.memory.safeRoute;
-                creep.memory.status = "working";
-            }
-            else {
-                // this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
-                if (!creep.memory.safeRoute) {
-                    creep.memory.safeRoute = this.fetchSafePath(creep, creep.memory.room);
-                }
-                this.moveCreep(creep, creep.memory.safeRoute[0]);
-            }
-        }
-    }
-    fetchSafePath(creep, destinationRoomName) {
-        const safeRoute = [];
-        const safeExits = findPath.findSafePathToRoom(creep.pos.roomName, destinationRoomName);
-        if (safeExits !== -2) {
-            Object.entries(safeExits).forEach(([roomExitArrayIndexString, roomExitArrayDictionary]) => {
-                const roomExitArrayIndexUnknown = roomExitArrayIndexString;
-                const roomExitArrayIndex = roomExitArrayIndexUnknown;
-                const roomPositionCoordinates = findPath.findClearTerrain(roomExitArrayDictionary.room);
-                safeRoute[roomExitArrayIndex] = roomPositionCoordinates;
-            });
-        }
-        return safeRoute;
-    }
-    moveCreep(creep, destination) {
-        let nextDestination = new RoomPosition(destination.x, destination.y, destination.roomName);
-        if (creep.pos.roomName !== destination.roomName) {
-            if (!creep.memory.safeRoute) {
-                creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
-            }
-        }
-        if (creep.memory.safeRoute) {
-            if (Object.entries(creep.memory.safeRoute).length > 1) {
-                if (creep.memory.safeRoute[0].roomName === creep.pos.roomName) {
-                    const newCreepSafeRouteMemory = Object.entries(creep.memory.safeRoute).splice(0, 1);
-                    const creepSafeRouteArray = [];
-                    newCreepSafeRouteMemory.forEach(([, safeRouteRoomPosition]) => {
-                        creepSafeRouteArray.push(safeRouteRoomPosition);
-                    });
-                    creep.memory.safeRoute = creepSafeRouteArray;
-                    nextDestination = new RoomPosition(creep.memory.safeRoute[0].x, creep.memory.safeRoute[0].y, creep.memory.safeRoute[0].roomName);
-                }
-            }
-            if (Object.entries(creep.memory.safeRoute).length === 1) {
-                if (creep.pos.roomName === creep.memory.safeRoute[0].roomName) {
-                    delete creep.memory.safeRoute;
-                }
-                else {
-                    nextDestination = new RoomPosition(creep.memory.safeRoute[0].x, creep.memory.safeRoute[0].y, creep.memory.safeRoute[0].roomName);
-                }
-            }
-        }
-        const moveResult = creep.moveTo(nextDestination, {
-            visualizePathStyle: {
-                fill: "transparent",
-                stroke: movePathColors[creep.memory.jobType],
-                lineStyle: "dotted",
-                strokeWidth: 0.1,
-                opacity: 0.66
-            }
-        });
-        return moveResult;
-    }
-    harvestSource(creep, source) {
-        const harvestResult = creep.harvest(source);
-        if (harvestResult === ERR_NOT_IN_RANGE) {
-            const moveResult = this.moveCreep(creep, source.pos);
-            return moveResult;
-        }
-        else {
-            return harvestResult;
-        }
-    }
-    pickupResource(creep, origin) {
-        const pickupResult = creep.pickup(origin);
-        if (pickupResult === ERR_NOT_IN_RANGE) {
-            const moveResult = this.moveCreep(creep, origin.pos);
-            return moveResult;
-        }
-        else
-            return pickupResult;
-    }
-    withdrawResource(creep, origin, resource) {
-        const withdrawResult = creep.withdraw(origin, resource);
-        if (withdrawResult === ERR_NOT_IN_RANGE) {
-            const moveResult = this.moveCreep(creep, origin.pos);
-            return moveResult;
-        }
-        else
-            return withdrawResult;
-    }
-    fetchSource(creep, forceStorage = false) {
-        const linkDistances = {};
-        let sortedLinkDistances = [];
-        let storageUsable = false;
-        let linksUsable = false;
-        let useStorage = false;
-        let useLinks = false;
-        if (forceStorage) {
-            useStorage = true;
-        }
-        else {
-            if (creep.room.memory.monitoring.structures.links) {
-                if (Object.entries(creep.room.memory.monitoring.structures.links).filter(([, cachedLink]) => cachedLink.mode === "rx" && cachedLink.energy.energyAvailable > 0).length > 0) {
-                    linksUsable = true;
-                }
-            }
-            if (creep.room.memory.monitoring.structures.storage) {
-                if (creep.room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY]) {
-                    if (creep.room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY].resourceAmount >=
-                        creep.store.getFreeCapacity(RESOURCE_ENERGY)) {
-                        storageUsable = true;
-                    }
-                }
-            }
-        }
-        if (storageUsable || linksUsable) {
-            if (!linksUsable) {
-                useStorage = true;
-            }
-            else {
-                if (!storageUsable) {
-                    useLinks = true;
-                }
-                else {
-                    Object.entries(creep.room.memory.monitoring.structures.links)
-                        .filter(([, cachedLink]) => cachedLink.mode === "rx" && cachedLink.energy.energyAvailable > 0)
-                        .forEach(([cachedLinkIdString]) => {
-                        const cachedLinkId = cachedLinkIdString;
-                        const cachedLink = Game.getObjectById(cachedLinkId);
-                        if (cachedLink) {
-                            linkDistances[cachedLinkId] = creep.pos.getRangeTo(cachedLink);
-                        }
-                    });
-                    if (Object.entries(linkDistances).length > 0) {
-                        sortedLinkDistances = Object.entries(linkDistances).sort(([, linkDistanceA], [, linkDistanceB]) => linkDistanceA - linkDistanceB);
-                        if (sortedLinkDistances[0]) {
-                            if (creep.room.storage) {
-                                const storageDistance = creep.pos.getRangeTo(creep.room.storage.pos);
-                                if (storageDistance <= sortedLinkDistances[0][1]) {
-                                    useStorage = true;
-                                }
-                                else {
-                                    useLinks = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if (useLinks === true) {
-            if (Object.entries(sortedLinkDistances)[0]) {
-                const linkId = sortedLinkDistances[0][0];
-                const link = Game.getObjectById(linkId);
-                if (link) {
-                    this.withdrawResource(creep, link, RESOURCE_ENERGY);
-                }
-            }
-        }
-        else {
-            if (useStorage === true) {
-                if (creep.room.memory.monitoring.structures.storage) {
-                    const storageId = creep.room.memory.monitoring.structures.storage.id;
-                    const storage = Game.getObjectById(storageId);
-                    if (storage) {
-                        this.withdrawResource(creep, storage, RESOURCE_ENERGY);
-                    }
-                }
-            }
-            else {
-                const droppedResourceArray = [];
-                Object.entries(creep.room.memory.monitoring.droppedResources)
-                    .filter(DroppedResource => DroppedResource[1].resourceType === RESOURCE_ENERGY)
-                    .forEach(([droppedResourceId]) => {
-                    const droppedResource = Game.getObjectById(droppedResourceId);
-                    if (droppedResource) {
-                        droppedResourceArray.push(droppedResource);
-                    }
-                });
-                if (droppedResourceArray.length > 0) {
-                    const closestDroppedEnergy = creep.pos.findClosestByPath(droppedResourceArray);
-                    if (closestDroppedEnergy) {
-                        this.pickupResource(creep, closestDroppedEnergy);
-                    }
-                }
-                else {
-                    if (Object.entries(creep.body).filter(([, bodyPart]) => bodyPart.type === WORK)) {
-                        const sourceArray = [];
-                        Object.entries(creep.room.memory.monitoring.sources).forEach(([sourceId]) => {
-                            const source = Game.getObjectById(sourceId);
-                            if (source) {
-                                if (source.energy <= source.energyCapacity) {
-                                    sourceArray.push(source);
-                                }
-                            }
-                        });
-                        if (sourceArray.length > 0) {
-                            const closestSource = creep.pos.findClosestByPath(sourceArray);
-                            if (closestSource) {
-                                this.harvestSource(creep, closestSource);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    depositResource(creep, destination, resource) {
-        const depositResult = creep.transfer(destination, resource);
-        if (depositResult === ERR_NOT_IN_RANGE) {
-            const moveResult = this.moveCreep(creep, destination.pos);
-            return moveResult;
-        }
-        else
-            return depositResult;
-    }
-    healCreep(creep, targetCreep) {
-        if (!targetCreep) {
-            targetCreep = creep;
-        }
-        const healResult = creep.heal(targetCreep);
-        if (healResult === ERR_NOT_IN_RANGE) {
-            this.moveCreep(creep, targetCreep.pos);
-        }
-        else {
-            if (healResult !== OK) {
-                Log.Alert(`${creep.name} in room ${creep.pos.roomName} tried to heal ${targetCreep.name} in room ${targetCreep.pos.roomName}, but failed with a result of ${healResult}`);
-            }
-        }
-    }
-    attackCreep(creep, targetCreep) {
-        const attackResult = creep.attack(targetCreep);
-        if (attackResult === ERR_NOT_IN_RANGE) {
-            this.moveCreep(creep, targetCreep.pos);
-        }
-        else {
-            if (attackResult !== OK) {
-                Log.Alert(`${creep.name} in room ${creep.pos.roomName} tried to attack ${targetCreep.name} in room ${targetCreep.pos.roomName}, but failed with a result of ${attackResult}`);
-            }
-        }
-    }
-};
-BaseCreep = __decorate([
-    profile
-], BaseCreep);
-
-let BuildConstructionSiteCreep = class BuildConstructionSiteCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.moveHome(creep);
-        if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
-            this.checkIfFull(creep, RESOURCE_ENERGY);
-        }
-        if (creep.memory.status === "working") {
-            const constructionSites = Object.entries(Memory.rooms[creep.memory.room].monitoring.constructionSites).sort(([, constructionSiteMemoryA], [, constructionSiteMemoryB]) => 
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/restrict-plus-operands, @typescript-eslint/no-unsafe-return
-            constructionSiteMemoryA.progress + constructionSiteMemoryB.progress);
-            if (constructionSites[0]) {
-                const constructionSiteId = constructionSites[0][0];
-                if (constructionSiteId) {
-                    const constructionSite = Game.getObjectById(constructionSiteId);
-                    if (constructionSite) {
-                        this.buildConstructionSite(creep, constructionSite);
-                    }
-                    else {
-                        this.moveCreep(creep, findPath.findClearTerrain(creep.memory.room));
-                    }
-                }
-            }
-        }
-        else if (creep.memory.status === "fetchingResource") {
-            this.fetchSource(creep);
-        }
-    }
-    buildConstructionSite(creep, constructionSite) {
-        const upgradeResult = creep.build(constructionSite);
-        if (upgradeResult === ERR_NOT_IN_RANGE) {
-            const moveResult = this.moveCreep(creep, constructionSite.pos);
-            return moveResult;
-        }
-        else {
-            return upgradeResult;
-        }
-    }
-};
-BuildConstructionSiteCreep = __decorate([
-    profile
-], BuildConstructionSiteCreep);
-
-let ClaimRoomCreep = class ClaimRoomCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.moveHome(creep);
-        if (creep.memory.status === "working") {
-            if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
-                const controllerToClaimMemory = Memory.rooms[creep.memory.room].monitoring.structures.controller;
-                if (controllerToClaimMemory) {
-                    const controllerToClaimId = controllerToClaimMemory.id;
-                    if (controllerToClaimId) {
-                        const controllerToClaim = Game.getObjectById(controllerToClaimId);
-                        if (controllerToClaim) {
-                            const claimResult = creep.claimController(controllerToClaim);
-                            if (claimResult === ERR_NOT_IN_RANGE) {
-                                this.moveCreep(creep, controllerToClaim.pos);
-                            }
-                            else if (claimResult === ERR_NOT_OWNER) {
-                                const attackControllerResult = creep.attackController(controllerToClaim);
-                                if (attackControllerResult === ERR_NOT_IN_RANGE) {
-                                    this.moveCreep(creep, controllerToClaim.pos);
-                                }
-                                else {
-                                    Log.Warning(`Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`);
-                                }
-                            }
-                            else
-                                Log.Warning(`Claim Result for ${creep.name} in ${creep.pos.roomName}: ${claimResult}`);
-                        }
-                    }
-                }
-            }
-        }
-    }
-};
-ClaimRoomCreep = __decorate([
-    profile
-], ClaimRoomCreep);
-
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-function fetchHostileCreep(room) {
-    const cachedHostiles = Object.entries(room.memory.monitoring.hostiles);
-    if (cachedHostiles.length === 1) {
-        const hostileIdUnknown = cachedHostiles[0][0];
-        const hostileId = hostileIdUnknown;
-        const hostile = Game.getObjectById(hostileId);
-        if (hostile) {
-            return hostile;
-        }
-    }
-    else {
-        if (cachedHostiles.length > 1) {
-            const cachedHostilesThatHeal = cachedHostiles.filter(([, cachedHostileMemory]) => cachedHostileMemory.bodyParts.includes(HEAL) === true);
-            if (cachedHostilesThatHeal.length === 1) {
-                const hostileIdUnknown = cachedHostilesThatHeal[0][0];
-                const hostileId = hostileIdUnknown;
-                const hostile = Game.getObjectById(hostileId);
-                if (hostile) {
-                    return hostile;
-                }
-            }
-            else {
-                if (cachedHostilesThatHeal.length > 1) {
-                    const cachedHostilesThatHealLowestHP = cachedHostiles.sort(([, cachedHostileMemoryA], [, cachedHostileMemoryB]) => cachedHostileMemoryA.health.hits - cachedHostileMemoryB.health.hits);
-                    const hostileIdUnknown = cachedHostilesThatHealLowestHP[0][0];
-                    const hostileId = hostileIdUnknown;
-                    const hostile = Game.getObjectById(hostileId);
-                    if (hostile) {
-                        return hostile;
-                    }
-                }
-            }
-        }
-    }
-    return undefined;
+function fetchBodyPartCost(bodyParts) {
+    let cost = 0;
+    bodyParts.forEach(bodyPart => {
+        cost = cost + BODYPART_COST[bodyPart];
+    });
+    return cost;
 }
-
-let DefendRoomCreep = class DefendRoomCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        if (Object.entries(creep.body).filter(([, bodyPart]) => bodyPart.type === HEAL).length > 0) {
-            if (creep.hits < creep.hitsMax) {
-                this.healCreep(creep);
-            }
-        }
-        if (creep.memory.status !== "recyclingCreep") {
-            this.moveHome(creep);
-            if (creep.memory.status === "working") {
-                const hostileCreep = fetchHostileCreep(creep.room);
-                if (hostileCreep) {
-                    this.attackCreep(creep, hostileCreep);
-                }
-                else {
-                    creep.memory.status = "recyclingCreep";
-                }
-            }
-        }
-    }
-};
-DefendRoomCreep = __decorate([
-    profile
-], DefendRoomCreep);
-
-let DismantleEnemyBuildingsCreep = class DismantleEnemyBuildingsCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.moveHome(creep);
-        if (creep.memory.status === "working") {
-            let buildingToDismantle;
-            if (creep.room.name === creep.memory.room) {
-                if (creep.room.memory.monitoring.structures.spawns) {
-                    const cachedSpawnsInRoomDictionary = Object.entries(creep.room.memory.monitoring.structures.spawns);
-                    if (cachedSpawnsInRoomDictionary.length > 0) {
-                        if (cachedSpawnsInRoomDictionary.length === 1) {
-                            const spawnToDismantleId = cachedSpawnsInRoomDictionary[0][1].id;
-                            const spawnToDismantle = Game.getObjectById(spawnToDismantleId);
-                            if (spawnToDismantle) {
-                                buildingToDismantle = spawnToDismantle;
-                            }
-                        }
-                    }
-                    else {
-                        const manualRampartToKill = Game.getObjectById("63341e08b0485dbcf5342fd4");
-                        if (manualRampartToKill) {
-                            buildingToDismantle = manualRampartToKill;
-                        }
-                    }
-                }
-            }
-            if (buildingToDismantle) {
-                const dismantleResult = creep.dismantle(buildingToDismantle);
-                if (dismantleResult === ERR_NOT_IN_RANGE) {
-                    this.moveCreep(creep, buildingToDismantle.pos);
-                }
-                else {
-                    if (dismantleResult !== OK) {
-                        Log.Alert(`${creep.name} in ${creep.room.name} encountered a ${dismantleResult} error while attempting to dismantle ${buildingToDismantle.structureType} - ${buildingToDismantle.id}`);
-                    }
-                }
-            }
-        }
-    }
-};
-DismantleEnemyBuildingsCreep = __decorate([
-    profile
-], DismantleEnemyBuildingsCreep);
-
-let FactoryEngineerCreep = class FactoryEngineerCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        if (creep.memory.status === "awaitingJob") {
-            if (Object.entries(creep.room.memory.queues.factoryQueue).length > 0) {
-                this.assignFactoryJob(creep);
-            }
-            else {
-                this.deassignFactoryJob(creep);
-            }
-        }
-        if (creep.memory.status !== "awaitingJob") {
-            if (creep.memory.factoryJobUUID) {
-                const nextJobParameters = creep.room.memory.queues.factoryQueue[creep.memory.factoryJobUUID];
-                if (nextJobParameters) {
-                    // Mux FactoryJobs
-                    switch (nextJobParameters.factoryJobType) {
-                        case "feedFactoryEnergy":
-                            this.runFeedFactoryEnergyJob(creep);
-                            break;
-                        default:
-                            Log.Alert(
-                            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-                            `FactoryEngineer ${creep.name} in room ${creep.room.name} cannot understand the factoryJobType: ${nextJobParameters.factoryJobType}`);
-                            break;
-                    }
-                }
-                else {
-                    this.deassignFactoryJob(creep);
-                }
-            }
-        }
-    }
-    assignFactoryJob(creep) {
-        const factoryJobs = Object.entries(creep.room.memory.queues.factoryQueue);
-        const nextFactoryJobUUID = factoryJobs.sort(([, factoryJobMemoryA], [, factoryJobMemoryB]) => factoryJobMemoryA.priority - factoryJobMemoryB.priority)[0][0];
-        creep.memory.factoryJobUUID = nextFactoryJobUUID;
-        creep.memory.status = "working";
-    }
-    deassignFactoryJob(creep) {
-        delete creep.memory.factoryJobUUID;
-        creep.memory.status = "awaitingJob";
-    }
-    runFeedFactoryEnergyJob(creep) {
-        this.checkIfFull(creep, RESOURCE_ENERGY);
-        if (creep.memory.status === "fetchingResource") {
-            this.fetchSource(creep, true);
-        }
-        else if (creep.memory.status === "working") {
-            const factoryMemory = creep.room.memory.monitoring.structures.factory;
-            if (factoryMemory) {
-                const factory = Game.getObjectById(factoryMemory.id);
-                if (factory) {
-                    this.depositResource(creep, factory, RESOURCE_ENERGY);
-                }
-            }
-        }
-    }
-};
-FactoryEngineerCreep = __decorate([
-    profile
-], FactoryEngineerCreep);
-
-let FeedLinkCreep = class FeedLinkCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.checkIfFull(creep, RESOURCE_ENERGY);
-        if (creep.memory.status === "fetchingResource") {
-            // Second argument forces use of storage
-            this.fetchSource(creep, true);
-        }
-        else if (creep.memory.status === "working") {
-            if (creep.memory.linkId) {
-                const link = Game.getObjectById(creep.memory.linkId);
-                if (link) {
-                    this.depositResource(creep, link, RESOURCE_ENERGY);
-                }
-            }
-        }
-    }
-};
-FeedLinkCreep = __decorate([
-    profile
-], FeedLinkCreep);
-
-let FeedSpawnCreep = class FeedSpawnCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.checkIfFull(creep, RESOURCE_ENERGY);
-        if (creep.memory.status === "fetchingResource") {
-            this.fetchSource(creep);
-        }
-        else {
-            if (creep.memory.status === "working") {
-                const notFullSpawnObjectArray = [];
-                if (creep.room.memory.monitoring.structures.spawns) {
-                    Object.entries(creep.room.memory.monitoring.structures.spawns)
-                        .filter(Spawn => Game.spawns[Spawn[0]].room === creep.room &&
-                        Game.spawns[Spawn[0]].store[RESOURCE_ENERGY] < Game.spawns[Spawn[0]].store.getCapacity(RESOURCE_ENERGY))
-                        .forEach(([spawnName]) => {
-                        const spawn = Game.spawns[spawnName];
-                        notFullSpawnObjectArray.push(spawn);
-                    });
-                }
-                if (creep.room.memory.monitoring.structures.extensions) {
-                    Object.entries(creep.room.memory.monitoring.structures.extensions)
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-                        .filter(([, ExtensionMemory]) => ExtensionMemory.energyAvailable < ExtensionMemory.energyCapacity)
-                        .forEach(([extensionIdString]) => {
-                        const extensionId = extensionIdString;
-                        const extension = Game.getObjectById(extensionId);
-                        if (extension) {
-                            notFullSpawnObjectArray.push(extension);
-                        }
-                    });
-                }
-                const closestNotFullSpawnObject = creep.pos.findClosestByPath(notFullSpawnObjectArray);
-                if (closestNotFullSpawnObject) {
-                    this.depositResource(creep, closestNotFullSpawnObject, RESOURCE_ENERGY);
-                }
-            }
-        }
-    }
-};
-FeedSpawnCreep = __decorate([
-    profile
-], FeedSpawnCreep);
-
-let FeedTowerCreep = class FeedTowerCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.checkIfFull(creep, RESOURCE_ENERGY);
-        if (creep.memory.status === "fetchingResource") {
-            this.fetchSource(creep);
-        }
-        else if (creep.memory.status === "working") {
-            if (creep.memory.towerId) {
-                const tower = Game.getObjectById(creep.memory.towerId);
-                if (tower) {
-                    this.depositResource(creep, tower, RESOURCE_ENERGY);
-                }
-            }
-        }
-    }
-};
-FeedTowerCreep = __decorate([
-    profile
-], FeedTowerCreep);
-
-let LabEngineerCreep = class LabEngineerCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        if (creep.memory.status === "awaitingJob") {
-            if (Object.entries(creep.room.memory.queues.labQueue).length > 0) {
-                this.assignLabJob(creep);
-            }
-            else {
-                this.deassignLabJob(creep);
-            }
-        }
-        if (creep.memory.status !== "awaitingJob") {
-            if (creep.memory.labJobUUID) {
-                const nextJobParameters = creep.room.memory.queues.labQueue[creep.memory.labJobUUID];
-                if (nextJobParameters) {
-                    // Mux LabJobs
-                    switch (nextJobParameters.labJobType) {
-                        case "feedLabEnergy":
-                            this.runFeedLabEnergyJob(creep);
-                            break;
-                        case "feedLabXGH20":
-                            this.runFeedLabXGH20Job(creep);
-                            break;
-                        default:
-                            Log.Alert(
-                            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-                            `LabEngineer ${creep.name} in room ${creep.room.name} cannot understand the labJobType: ${nextJobParameters.labJobType}`);
-                            break;
-                    }
-                }
-                else {
-                    this.deassignLabJob(creep);
-                }
-            }
-        }
-    }
-    assignLabJob(creep) {
-        const labJobs = Object.entries(creep.room.memory.queues.labQueue);
-        const nextLabJobUUID = labJobs.sort(([, labJobMemoryA], [, labJobMemoryB]) => labJobMemoryA.priority - labJobMemoryB.priority)[0][0];
-        creep.memory.labJobUUID = nextLabJobUUID;
-        creep.memory.status = "working";
-    }
-    deassignLabJob(creep) {
-        delete creep.memory.labJobUUID;
-        creep.memory.status = "awaitingJob";
-    }
-    runFeedLabEnergyJob(creep) {
-        this.checkIfFull(creep, RESOURCE_ENERGY);
-        if (creep.memory.status === "fetchingResource") {
-            this.fetchSource(creep, true);
-        }
-        else if (creep.memory.status === "working") {
-            if (creep.memory.labJobUUID) {
-                const lab = Game.getObjectById(creep.room.memory.queues.labQueue[creep.memory.labJobUUID].labId);
-                if (lab) {
-                    this.depositResource(creep, lab, RESOURCE_ENERGY);
-                }
-            }
-        }
-    }
-    runFeedLabXGH20Job(creep) {
-        this.checkIfFull(creep, RESOURCE_CATALYZED_GHODIUM_ACID);
-        if (creep.memory.status === "fetchingResource") {
-            if (creep.room.terminal) {
-                this.withdrawResource(creep, creep.room.terminal, RESOURCE_CATALYZED_GHODIUM_ACID);
-            }
-        }
-        else if (creep.memory.status === "working") {
-            if (creep.memory.labJobUUID) {
-                const lab = Game.getObjectById(creep.room.memory.queues.labQueue[creep.memory.labJobUUID].labId);
-                if (lab) {
-                    this.depositResource(creep, lab, RESOURCE_CATALYZED_GHODIUM_ACID);
-                }
-            }
-        }
-    }
-};
-LabEngineerCreep = __decorate([
-    profile
-], LabEngineerCreep);
-
-let LootResourceCreep = class LootResourceCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.checkIfFull(creep, RESOURCE_ENERGY);
-        if (creep.memory.status === "fetchingResource") {
-            const resourceArray = [];
-            Object.entries(creep.room.memory.monitoring.droppedResources).forEach(([resourceIdString]) => {
-                const resourceId = resourceIdString;
-                const resource = Game.getObjectById(resourceId);
-                if (resource) {
-                    resourceArray.push(resource);
-                }
-            });
-            const nearestResource = creep.pos.findClosestByPath(resourceArray);
-            if (nearestResource) {
-                this.pickupResource(creep, nearestResource);
-            }
-        }
-        else if (creep.memory.status === "working") {
-            if (creep.room.memory.monitoring.structures.storage) {
-                const storage = Game.getObjectById(creep.room.memory.monitoring.structures.storage.id);
-                if (storage) {
-                    Object.entries(creep.store).forEach(([resourceConstantString]) => {
-                        const resourceConstant = resourceConstantString;
-                        this.depositResource(creep, storage, resourceConstant);
-                    });
-                }
-            }
-        }
-    }
-};
-LootResourceCreep = __decorate([
-    profile
-], LootResourceCreep);
-
-let ReserveRoomCreep = class ReserveRoomCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.checkIfRecyclable(creep);
-        if (creep.memory.status !== "recyclingCreep") {
-            this.moveHome(creep);
-        }
-        if (creep.memory.status === "working") {
-            if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
-                const controllerToReserveMemory = Memory.rooms[creep.memory.room].monitoring.structures.controller;
-                if (controllerToReserveMemory) {
-                    const controllerToReserveId = controllerToReserveMemory.id;
-                    if (controllerToReserveId) {
-                        const controllerToReserve = Game.getObjectById(controllerToReserveId);
-                        if (controllerToReserve) {
-                            const reserveResult = creep.reserveController(controllerToReserve);
-                            if (reserveResult === ERR_NOT_IN_RANGE) {
-                                this.moveCreep(creep, controllerToReserve.pos);
-                            }
-                            else if (reserveResult === ERR_INVALID_TARGET) {
-                                const attackControllerResult = creep.attackController(controllerToReserve);
-                                if (attackControllerResult === ERR_NOT_IN_RANGE) {
-                                    this.moveCreep(creep, controllerToReserve.pos);
-                                }
-                                else {
-                                    Log.Warning(`Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`);
-                                }
-                            }
-                            else if (reserveResult !== OK) {
-                                Log.Warning(`Reserve Result for ${creep.name} in ${creep.pos.roomName}: ${reserveResult}`);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    checkIfRecyclable(creep) {
-        if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
-            const controllerToReserveMemory = Memory.rooms[creep.memory.room].monitoring.structures.controller;
-            if (controllerToReserveMemory) {
-                const controllerToReserveId = controllerToReserveMemory.id;
-                if (controllerToReserveId) {
-                    const controllerToReserve = Game.getObjectById(controllerToReserveId);
-                    if (controllerToReserve) {
-                        if (creep.ticksToLive && controllerToReserve.upgradeBlocked) {
-                            if (creep.ticksToLive < controllerToReserve.upgradeBlocked) {
-                                creep.memory.status = "recyclingCreep";
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-};
-ReserveRoomCreep = __decorate([
-    profile
-], ReserveRoomCreep);
-
-let ScoutRoomCreep = class ScoutRoomCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.moveHome(creep);
-        if (creep.memory.status === "working") {
-            this.moveCreep(creep, findPath.findClearTerrain(creep.memory.room));
-        }
-    }
-};
-ScoutRoomCreep = __decorate([
-    profile
-], ScoutRoomCreep);
-
-let SourceMinerCreep = class SourceMinerCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.moveHome(creep);
-        if (creep.memory.status === "fetchingResource" || creep.memory.status === "working") {
-            if (creep.memory.sourceId) {
-                this.checkIfFull(creep, RESOURCE_ENERGY);
-                if (creep.memory.status === "fetchingResource") {
-                    const source = Game.getObjectById(creep.memory.sourceId);
-                    if (source) {
-                        this.harvestSource(creep, source);
-                    }
-                }
-                else if (creep.memory.status === "working") {
-                    let dropEnergy = false;
-                    if (creep.room.memory.monitoring.structures.storage) {
-                        const storage = Game.getObjectById(creep.room.memory.monitoring.structures.storage.id);
-                        if (storage) {
-                            dropEnergy = false;
-                        }
-                        else
-                            dropEnergy = true;
-                    }
-                    else
-                        dropEnergy = true;
-                    if (dropEnergy === true) {
-                        creep.drop(RESOURCE_ENERGY);
-                    }
-                    else if (creep.room.memory.monitoring.structures.storage) {
-                        const storage = Game.getObjectById(creep.room.memory.monitoring.structures.storage.id);
-                        if (storage) {
-                            this.depositResource(creep, storage, RESOURCE_ENERGY);
-                        }
-                    }
-                }
-            }
-        }
-    }
-};
-SourceMinerCreep = __decorate([
-    profile
-], SourceMinerCreep);
-
-let TankRoomCreep = class TankRoomCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.moveHome(creep);
-        if (creep.memory.status === "working") {
-            this.moveCreep(creep, findPath.findClearTerrain(creep.memory.room));
-        }
-    }
-};
-TankRoomCreep = __decorate([
-    profile
-], TankRoomCreep);
-
-let TerminalEngineerCreep = class TerminalEngineerCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        if (creep.memory.status === "awaitingJob") {
-            if (Object.entries(creep.room.memory.queues.terminalQueue).length > 0) {
-                this.assignTerminalJob(creep);
-            }
-            else {
-                this.deassignTerminalJob(creep);
-            }
-        }
-        if (creep.memory.status !== "awaitingJob") {
-            if (creep.memory.terminalJobUUID) {
-                const nextJobParameters = creep.room.memory.queues.terminalQueue[creep.memory.terminalJobUUID];
-                if (nextJobParameters) {
-                    // Mux TerminalJobs
-                    switch (nextJobParameters.terminalJobType) {
-                        case "feedTerminalEnergy":
-                            this.runFeedTerminalEnergyJob(creep);
-                            break;
-                        default:
-                            Log.Alert(
-                            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-                            `TerminalEngineer ${creep.name} in room ${creep.room.name} cannot understand the terminalJobType: ${nextJobParameters.terminalJobType}`);
-                            break;
-                    }
-                }
-                else {
-                    this.deassignTerminalJob(creep);
-                }
-            }
-        }
-    }
-    assignTerminalJob(creep) {
-        const terminalJobs = Object.entries(creep.room.memory.queues.terminalQueue);
-        const nextTerminalJobUUID = terminalJobs.sort(([, terminalJobMemoryA], [, terminalJobMemoryB]) => terminalJobMemoryA.priority - terminalJobMemoryB.priority)[0][0];
-        creep.memory.terminalJobUUID = nextTerminalJobUUID;
-        creep.memory.status = "working";
-    }
-    deassignTerminalJob(creep) {
-        delete creep.memory.terminalJobUUID;
-        creep.memory.status = "awaitingJob";
-    }
-    runFeedTerminalEnergyJob(creep) {
-        this.checkIfFull(creep, RESOURCE_ENERGY);
-        if (creep.memory.status === "fetchingResource") {
-            this.fetchSource(creep, true);
-        }
-        else if (creep.memory.status === "working") {
-            if (creep.room.terminal) {
-                this.depositResource(creep, creep.room.terminal, RESOURCE_ENERGY);
-            }
-        }
-    }
-};
-TerminalEngineerCreep = __decorate([
-    profile
-], TerminalEngineerCreep);
-
-let TransportResourceCreep = class TransportResourceCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.checkIfFull(creep, RESOURCE_ENERGY);
-        if (creep.memory.status === "fetchingResource") {
-            if (creep.pos.roomName !== creep.memory.room) {
-                this.moveHome(creep);
-                creep.memory.status = "fetchingResource";
-            }
-            else {
-                const resourceArray = [];
-                Object.entries(creep.room.memory.monitoring.droppedResources)
-                    .filter(([, resourceMemory]) => resourceMemory.resourceType === creep.memory.resourceType)
-                    .forEach(([resourceIdString]) => {
-                    const resourceId = resourceIdString;
-                    const resource = Game.getObjectById(resourceId);
-                    if (resource) {
-                        resourceArray.push(resource);
-                    }
-                });
-                const nearestResource = creep.pos.findClosestByPath(resourceArray);
-                if (nearestResource) {
-                    this.pickupResource(creep, nearestResource);
-                }
-            }
-        }
-        else if (creep.memory.status === "working") {
-            if (creep.memory.storage) {
-                const storage = Game.getObjectById(creep.memory.storage);
-                if (storage) {
-                    Object.entries(creep.store).forEach(([resourceConstantString]) => {
-                        const resourceConstant = resourceConstantString;
-                        this.depositResource(creep, storage, resourceConstant);
-                    });
-                }
-            }
-        }
-    }
-};
-TransportResourceCreep = __decorate([
-    profile
-], TransportResourceCreep);
-
-let UpgradeControllerCreep = class UpgradeControllerCreep extends BaseCreep {
-    constructor(creep) {
-        super(creep);
-        this.runCreep(creep);
-    }
-    runCreep(creep) {
-        this.boostBodyParts(creep, WORK, RESOURCE_CATALYZED_GHODIUM_ACID);
-        this.moveHome(creep);
-        if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
-            this.checkIfFull(creep, RESOURCE_ENERGY);
-        }
-        if (creep.memory.status === "fetchingResource") {
-            this.fetchSource(creep);
-        }
-        else {
-            if (creep.memory.status === "working") {
-                const controllerId = creep.memory.controllerId;
-                if (controllerId) {
-                    const controller = Game.getObjectById(controllerId);
-                    if (controller) {
-                        this.upgradeController(creep, controller);
-                    }
-                }
-            }
-        }
-    }
-    upgradeController(creep, controller) {
-        const upgradeResult = creep.upgradeController(controller);
-        if (upgradeResult === ERR_NOT_IN_RANGE) {
-            const moveResult = this.moveCreep(creep, controller.pos);
-            return moveResult;
-        }
-        else {
-            return upgradeResult;
-        }
-    }
-};
-UpgradeControllerCreep = __decorate([
-    profile
-], UpgradeControllerCreep);
-
-class CreepOperator {
-    constructor() {
-        Object.entries(Game.creeps).forEach(([, creepToOperate]) => {
-            switch (creepToOperate.memory.jobType) {
-                case "mineSource":
-                    new SourceMinerCreep(creepToOperate);
-                    break;
-                case "feedSpawn":
-                    new FeedSpawnCreep(creepToOperate);
-                    break;
-                case "feedTower":
-                    new FeedTowerCreep(creepToOperate);
-                    break;
-                case "feedLink":
-                    new FeedLinkCreep(creepToOperate);
-                    break;
-                case "upgradeController":
-                    new UpgradeControllerCreep(creepToOperate);
-                    break;
-                case "buildConstructionSite":
-                    new BuildConstructionSiteCreep(creepToOperate);
-                    break;
-                case "lootResource":
-                    new LootResourceCreep(creepToOperate);
-                    break;
-                case "transportResource":
-                    new TransportResourceCreep(creepToOperate);
-                    break;
-                case "scoutRoom":
-                    new ScoutRoomCreep(creepToOperate);
-                    break;
-                case "tankRoom":
-                    new TankRoomCreep(creepToOperate);
-                    break;
-                case "claimRoom":
-                    new ClaimRoomCreep(creepToOperate);
-                    break;
-                case "defendRoom":
-                    new DefendRoomCreep(creepToOperate);
-                    break;
-                case "reserveRoom":
-                    new ReserveRoomCreep(creepToOperate);
-                    break;
-                case "terminalEngineer":
-                    new TerminalEngineerCreep(creepToOperate);
-                    break;
-                case "labEngineer":
-                    new LabEngineerCreep(creepToOperate);
-                    break;
-                case "factoryEngineer":
-                    new FactoryEngineerCreep(creepToOperate);
-                    break;
-                case "dismantleEnemyBuildings":
-                    new DismantleEnemyBuildingsCreep(creepToOperate);
-                    break;
-                default:
-                    Log.Alert(
-                    // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-                    `${creepToOperate.memory.jobType} registered on ${creepToOperate.name} in ${creepToOperate.room.name} does not correspond with any valid jobTypes`);
-            }
-        });
-    }
-}
-
-class FactoryEngineerJob {
-    constructor(JobParameters, count = 1) {
-        this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
-            .forEach(([jobUUID, jobMemory]) => {
-            if (jobMemory.index > count) {
-                this.deleteJob(jobUUID);
-            }
-        });
-        if (count === 1) {
-            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.factoryId}-1`);
-            this.createJob(UUID, 1);
-        }
-        else {
-            let iterations = 1;
-            while (iterations <= count) {
-                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.factoryId}-${iterations}`);
-                this.createJob(UUID, iterations);
-                iterations++;
-            }
-        }
-    }
-    createJob(UUID, index) {
-        if (!Memory.queues.jobQueue[UUID]) {
-            Log.Informational(`Creating "FactoryEngineerJob" for Factory ID: "${this.JobParameters.factoryId}" with the UUID "${UUID}"`);
-            Memory.queues.jobQueue[UUID] = {
-                jobParameters: {
-                    uuid: UUID,
-                    status: "awaitingJob",
-                    room: this.JobParameters.room,
-                    spawnRoom: this.JobParameters.spawnRoom,
-                    jobType: "factoryEngineer",
-                    factoryId: this.JobParameters.factoryId
-                },
-                index,
-                room: this.JobParameters.room,
-                jobType: "factoryEngineer",
-                timeAdded: Game.time
-            };
-        }
-    }
-    deleteJob(UUID) {
-        if (Memory.queues.jobQueue[UUID]) {
-            Log.Informational(`Deleting "FactoryEngineerJob" for Factory ID: "${this.JobParameters.factoryId}" with the UUID "${UUID}"`);
-            delete Memory.queues.jobQueue[UUID];
-        }
-    }
-}
-
-let FactoryOperator = class FactoryOperator {
-    constructor() {
-        if (Memory.rooms) {
-            Object.entries(Memory.rooms).forEach(([roomName]) => {
-                if (Memory.rooms[roomName]) {
-                    const factoryMemory = Memory.rooms[roomName].monitoring.structures.factory;
-                    if (factoryMemory) {
-                        const factory = Game.getObjectById(factoryMemory.id);
-                        if (factory) {
-                            if (factory.my) {
-                                this.manageFactoryJobs(factory);
-                                this.maintainFactoryEngineerJobs(factory);
-                            }
-                        }
-                    }
-                }
-            });
-        }
-    }
-    manageFactoryJobs(factory) {
-        if (factory.store[RESOURCE_ENERGY] < FACTORY_CAPACITY / 10 && factory.store.getCapacity(RESOURCE_ENERGY) > 0) {
-            this.createFeedFactoryEnergyJob(factory);
-        }
-        else {
-            this.destroyFeedFactoryEnergyJob(factory);
-        }
-    }
-    createFeedFactoryEnergyJob(factory) {
-        const factoryJobName = "feedFactoryEnergy";
-        const factoryJobUuid = base64.encode(`${factory.id}-${factoryJobName}`);
-        if (factory.room.memory.queues.factoryQueue) {
-            factory.room.memory.queues.factoryQueue[factoryJobUuid] = {
-                factoryJobType: "feedFactoryEnergy",
-                priority: 1
-            };
-        }
-    }
-    destroyFeedFactoryEnergyJob(factory) {
-        const factoryJobName = "feedFactoryEnergy";
-        const factoryJobUuid = base64.encode(`${factory.id}-${factoryJobName}`);
-        if (factory.room.memory.queues.factoryQueue) {
-            if (factory.room.memory.queues.factoryQueue[factoryJobUuid]) {
-                delete factory.room.memory.queues.factoryQueue[factoryJobUuid];
-            }
-        }
-    }
-    maintainFactoryEngineerJobs(factory) {
-        if (factory) {
-            const jobParameters = {
-                room: factory.pos.roomName,
-                status: "awaitingJob",
-                jobType: "factoryEngineer",
-                factoryId: factory.id
-            };
-            let count = creepNumbers[jobParameters.jobType];
-            const factoryJobs = Object.entries(factory.room.memory.queues.factoryQueue);
-            if (factoryJobs.length === 0) {
-                count = 0;
-            }
-            new FactoryEngineerJob(jobParameters, count);
-        }
-    }
-};
-FactoryOperator = __decorate([
-    profile
-], FactoryOperator);
-
-let GameOperator = class GameOperator {
-    constructor() {
-        this.generatePixel();
-    }
-    generatePixel() {
-        if (Game.cpu) {
-            if (Game.cpu.generatePixel && Game.cpu.bucket === 10000) {
-                Game.cpu.generatePixel();
-            }
-        }
-    }
-};
-GameOperator = __decorate([
-    profile
-], GameOperator);
-
-class LabEngineerJob {
-    constructor(JobParameters, count = 1) {
-        this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
-            .forEach(([jobUUID, jobMemory]) => {
-            if (jobMemory.index > count) {
-                this.deleteJob(jobUUID);
-            }
-        });
-        if (count === 1) {
-            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
-            this.createJob(UUID, 1);
-        }
-        else {
-            let iterations = 1;
-            while (iterations <= count) {
-                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
-                this.createJob(UUID, iterations);
-                iterations++;
-            }
-        }
-    }
-    createJob(UUID, index) {
-        if (!Memory.queues.jobQueue[UUID]) {
-            Log.Informational(`Creating "LabEngineerJob" for Room: "${this.JobParameters.room}" with the UUID "${UUID}"`);
-            Memory.queues.jobQueue[UUID] = {
-                jobParameters: {
-                    uuid: UUID,
-                    status: "awaitingJob",
-                    room: this.JobParameters.room,
-                    spawnRoom: this.JobParameters.spawnRoom,
-                    jobType: "labEngineer"
-                },
-                index,
-                room: this.JobParameters.room,
-                jobType: "labEngineer",
-                timeAdded: Game.time
-            };
-        }
-    }
-    deleteJob(UUID) {
-        if (Memory.queues.jobQueue[UUID]) {
-            Log.Informational(`Deleting "LabEngineerJob" for Room: "${this.JobParameters.room}" with the UUID "${UUID}"`);
-            delete Memory.queues.jobQueue[UUID];
-        }
-    }
-}
-
-const labConfiguration = {
-    W56N12: {
-        boostLab: "63a1e52f46d2f61382721fbf"
-    }
-};
-
-let LabOperator = class LabOperator {
-    constructor() {
-        if (Memory.rooms) {
-            Object.entries(Memory.rooms).forEach(([roomName]) => {
-                Object.entries(Memory.rooms[roomName].monitoring.structures.labs).forEach(([labIdString]) => {
-                    const labId = labIdString;
-                    const lab = Game.getObjectById(labId);
-                    if (lab) {
-                        if (lab.my) {
-                            this.manageLabJobs(lab);
-                        }
-                    }
-                });
-                this.maintainLabEngineerJobs(roomName);
-            });
-        }
-    }
-    manageLabJobs(lab) {
-        var _a;
-        if (lab.store[RESOURCE_ENERGY] < LAB_ENERGY_CAPACITY) {
-            this.createFeedLabEnergyJob(lab);
-        }
-        else {
-            this.destroyFeedLabEnergyJob(lab);
-        }
-        if (labConfiguration[lab.pos.roomName]) {
-            if (lab.id === labConfiguration[lab.pos.roomName].boostLab) {
-                if (lab.room.terminal) {
-                    if (((_a = lab.room.terminal) === null || _a === void 0 ? void 0 : _a.store[RESOURCE_CATALYZED_GHODIUM_ACID]) > 0 &&
-                        lab.store.getFreeCapacity(RESOURCE_CATALYZED_GHODIUM_ACID) > 0) {
-                        this.createFeedLabXGH20Job(lab);
-                    }
-                    else {
-                        this.destroyFeedLabXGH20Job(lab);
-                    }
-                }
-            }
-        }
-    }
-    createFeedLabEnergyJob(lab) {
-        const labJobName = "feedLabEnergy";
-        const labJobUuid = base64.encode(`${lab.id}-${labJobName}`);
-        if (lab.room.memory.queues.labQueue) {
-            lab.room.memory.queues.labQueue[labJobUuid] = {
-                labId: lab.id,
-                labJobType: "feedLabEnergy",
-                priority: 1
-            };
-        }
-    }
-    destroyFeedLabEnergyJob(lab) {
-        const labJobName = "feedLabEnergy";
-        const labJobUuid = base64.encode(`${lab.id}-${labJobName}`);
-        if (lab.room.memory.queues.labQueue) {
-            if (lab.room.memory.queues.labQueue[labJobUuid]) {
-                delete lab.room.memory.queues.labQueue[labJobUuid];
-            }
-        }
-    }
-    createFeedLabXGH20Job(lab) {
-        const labJobName = "feedLabXGH20";
-        const labJobUuid = base64.encode(`${lab.id}-${labJobName}`);
-        if (lab.room.memory.queues.labQueue) {
-            lab.room.memory.queues.labQueue[labJobUuid] = {
-                labId: lab.id,
-                labJobType: "feedLabXGH20",
-                priority: 2
-            };
-        }
-    }
-    destroyFeedLabXGH20Job(lab) {
-        const labJobName = "feedLabXGH20";
-        const labJobUuid = base64.encode(`${lab.id}-${labJobName}`);
-        if (lab.room.memory.queues.labQueue) {
-            if (lab.room.memory.queues.labQueue[labJobUuid]) {
-                delete lab.room.memory.queues.labQueue[labJobUuid];
-            }
-        }
-    }
-    maintainLabEngineerJobs(roomName) {
-        if (Object.entries(Memory.rooms[roomName].monitoring.structures.labs).length > 0) {
-            const jobParameters = {
-                room: roomName,
-                status: "awaitingJob",
-                jobType: "labEngineer"
-            };
-            let count = creepNumbers[jobParameters.jobType];
-            const labJobs = Object.entries(Memory.rooms[roomName].queues.labQueue);
-            if (labJobs.length === 0) {
-                count = 0;
-            }
-            new LabEngineerJob(jobParameters, count);
-        }
-    }
-};
-LabOperator = __decorate([
-    profile
-], LabOperator);
-
-class FeedLinkJob {
-    constructor(JobParameters, count = 1) {
-        this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
-            .forEach(([jobUUID, jobMemory]) => {
-            if (jobMemory.index > count) {
-                this.deleteJob(jobUUID);
-            }
-        });
-        if (count === 1) {
-            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.linkId}-1`);
-            this.createJob(UUID, 1);
-        }
-        else {
-            let iterations = 1;
-            while (iterations <= count) {
-                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.linkId}-${iterations}`);
-                this.createJob(UUID, iterations);
-                iterations++;
-            }
-        }
-    }
-    createJob(UUID, index) {
-        if (!Memory.queues.jobQueue[UUID]) {
-            Log.Informational(`Creating "FeedLinkJob" for Link ID "${this.JobParameters.linkId} with the UUID of ${UUID}"`);
-            Memory.queues.jobQueue[UUID] = {
-                jobParameters: {
-                    uuid: UUID,
-                    status: "fetchingResource",
-                    room: this.JobParameters.room,
-                    jobType: "feedLink",
-                    linkId: this.JobParameters.linkId
-                },
-                index,
-                room: this.JobParameters.room,
-                jobType: "feedLink",
-                timeAdded: Game.time
-            };
-        }
-    }
-    deleteJob(UUID) {
-        if (Memory.queues.jobQueue[UUID]) {
-            Log.Informational(`Deleting "FeedLinkJob" for Link ID "${this.JobParameters.linkId} with the UUID of ${UUID}"`);
-            delete Memory.queues.jobQueue[UUID];
-        }
-    }
-}
-
-let LinkOperator = class LinkOperator {
-    constructor() {
-        this.operateLinks();
-    }
-    operateLinks() {
-        Object.entries(Memory.rooms).forEach(([roomName]) => {
-            if (Memory.rooms[roomName].monitoring.structures.links) {
-                Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
-                    const linkId = linkIdString;
-                    const link = Game.getObjectById(linkId);
-                    const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
-                    if (linkMode === "tx" && link) {
-                        if (link.my) {
-                            this.createLinkFeederJob(link);
-                            this.transmitEnergy(link);
-                        }
-                    }
-                });
-            }
-        });
-    }
-    transmitEnergy(txLink) {
-        if (txLink.store[RESOURCE_ENERGY] === txLink.store.getCapacity(RESOURCE_ENERGY)) {
-            if (txLink.cooldown === 0) {
-                const linkIdsThatCanRecieveEnergy = Object.entries(Memory.rooms[txLink.pos.roomName].monitoring.structures.links)
-                    .filter(([, linkMonitorMemory]) => linkMonitorMemory.mode === "rx" &&
-                    linkMonitorMemory.energy.energyAvailable < linkMonitorMemory.energy.energyCapacity)
-                    .sort(([, linkMonitorMemoryA], [, linkMonitorMemoryB]) => linkMonitorMemoryA.energy.energyAvailable - linkMonitorMemoryB.energy.energyAvailable);
-                if (linkIdsThatCanRecieveEnergy.length > 0) {
-                    const destinationLinkId = linkIdsThatCanRecieveEnergy[0][0];
-                    const destinationLink = Game.getObjectById(destinationLinkId);
-                    if (destinationLink) {
-                        const transmissionResult = txLink.transferEnergy(destinationLink);
-                        Log.Debug(`${txLink.id} attempted to transmit energy to ${destinationLink.id}, result: ${transmissionResult} `);
-                    }
-                }
-            }
-        }
-    }
-    createLinkFeederJob(link) {
-        const jobParameters = {
-            status: "fetchingResource",
-            room: link.room.name,
-            jobType: "feedLink",
-            linkId: link.id
-        };
-        const count = creepNumbers[jobParameters.jobType];
-        new FeedLinkJob(jobParameters, count);
-    }
-};
-LinkOperator = __decorate([
-    profile
-], LinkOperator);
 
 const creepBodyParts = {
     // First level of nesting, calculated by energyCapacityAvailable, grouped by their RCL maximums.
@@ -3574,10 +1988,6 @@ const creepBodyParts = {
             CARRY,
             CARRY,
             CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY
         ],
         feedSpawn: [
@@ -3606,10 +2016,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY,
             CARRY,
             CARRY,
@@ -3678,10 +2084,6 @@ const creepBodyParts = {
             CARRY,
             CARRY,
             CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY
         ],
         terminalEngineer: [
@@ -3710,10 +2112,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY,
             CARRY,
             CARRY,
@@ -3782,10 +2180,6 @@ const creepBodyParts = {
             CARRY,
             CARRY,
             CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY
         ],
         transportResource: [
@@ -3834,10 +2228,6 @@ const creepBodyParts = {
             CARRY,
             CARRY,
             CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY
         ],
         feedTower: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
@@ -3862,19 +2252,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
             WORK,
             WORK,
             WORK,
@@ -3914,19 +2291,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
             WORK,
             WORK,
             WORK,
@@ -3960,40 +2324,12 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            HEAL,
-            HEAL,
-            HEAL,
-            HEAL,
-            HEAL,
             HEAL,
             HEAL,
             HEAL,
@@ -4053,76 +2389,8 @@ const creepBodyParts = {
             MOVE
         ],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        dismantleEnemyBuildings: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK
-        ],
-        reserveRoom: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CLAIM,
-            CLAIM,
-            CLAIM,
-            CLAIM,
-            CLAIM,
-            CLAIM,
-            CLAIM,
-            CLAIM
-        ]
+        dismantleEnemyBuildings: [MOVE],
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
     },
     8: {
         // Second level is the jobType.
@@ -4173,10 +2441,6 @@ const creepBodyParts = {
             CARRY,
             CARRY,
             CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY
         ],
         feedSpawn: [
@@ -4205,10 +2469,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY,
             CARRY,
             CARRY,
@@ -4277,10 +2537,6 @@ const creepBodyParts = {
             CARRY,
             CARRY,
             CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY
         ],
         terminalEngineer: [
@@ -4309,10 +2565,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY,
             CARRY,
             CARRY,
@@ -4381,10 +2633,6 @@ const creepBodyParts = {
             CARRY,
             CARRY,
             CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY
         ],
         transportResource: [
@@ -4413,10 +2661,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY,
             CARRY,
             CARRY,
@@ -4513,19 +2757,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
             WORK,
             WORK,
             WORK,
@@ -4559,40 +2790,12 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            ATTACK,
-            HEAL,
-            HEAL,
-            HEAL,
-            HEAL,
-            HEAL,
             HEAL,
             HEAL,
             HEAL,
@@ -4652,77 +2855,1207 @@ const creepBodyParts = {
             MOVE
         ],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        dismantleEnemyBuildings: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK,
-            WORK
-        ],
-        reserveRoom: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CLAIM,
-            CLAIM,
-            CLAIM,
-            CLAIM,
-            CLAIM,
-            CLAIM,
-            CLAIM,
-            CLAIM
-        ]
+        dismantleEnemyBuildings: [MOVE],
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
     }
+    //   7: {
+    //     // Second level is the jobType.
+    //     mineSource: [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CARRY],
+    //     workTerminal: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     feedSpawn: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     factoryEngineer: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     terminalEngineer: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     labEngineer: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     transportResource: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     feedTower: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+    //     feedLink: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+    //     lootResource: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+    //     upgradeController: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     buildConstructionSite: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
+    //     defendRoom: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL
+    //     ],
+    //     tankRoom: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE
+    //     ],
+    //     claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+    //     dismantleEnemyBuildings: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK
+    //     ],
+    //     reserveRoom: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM
+    //     ]
+    //   },
+    //   8: {
+    //     // Second level is the jobType.
+    //     mineSource: [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CARRY],
+    //     workTerminal: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     feedSpawn: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     factoryEngineer: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     terminalEngineer: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     labEngineer: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     transportResource: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     feedTower: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+    //     feedLink: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+    //     lootResource: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+    //     upgradeController: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     buildConstructionSite: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY,
+    //       CARRY
+    //     ],
+    //     scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
+    //     defendRoom: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       ATTACK,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL,
+    //       HEAL
+    //     ],
+    //     tankRoom: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       TOUGH,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE
+    //     ],
+    //     claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+    //     dismantleEnemyBuildings: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK,
+    //       WORK
+    //     ],
+    //     reserveRoom: [
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       MOVE,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM,
+    //       CLAIM
+    //     ]
+    //   }
 };
 
 function fetchBodyParts(creepType, roomName) {
@@ -4928,6 +4261,1648 @@ function fetchBodyParts(creepType, roomName) {
     return [];
 }
 
+const movePathColors = {
+    mineSource: "#FFEB3B",
+    workTerminal: "#66BB6A",
+    feedSpawn: "#DCE775",
+    feedTower: "#D4E157",
+    feedLink: "#CDDC39",
+    buildConstructionSite: "#FFB300",
+    dismantleEnemyBuildings: "#FFB300",
+    upgradeController: "#FF5722",
+    lootResource: "#009688",
+    scoutRoom: "#424242",
+    tankRoom: "#646464",
+    claimRoom: "#1A237E",
+    defendRoom: "#B91C1C",
+    reserveRoom: "#5C6BC0",
+    transportResource: "#00897B",
+    terminalEngineer: "#2E7D32",
+    labEngineer: "#03A9F4",
+    factoryEngineer: "#607D8B"
+};
+
+let BaseCreep = class BaseCreep {
+    constructor(creep) {
+        if (!creep.spawning) {
+            if (creep.memory.status === "recyclingCreep") {
+                const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
+                if (closestSpawn) {
+                    const recycleResult = closestSpawn.recycleCreep(creep);
+                    if (recycleResult === ERR_NOT_IN_RANGE) {
+                        this.moveCreep(creep, closestSpawn.pos);
+                    }
+                    else {
+                        if (recycleResult === OK) {
+                            Log.Debug(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`);
+                        }
+                        else {
+                            Log.Warning(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    checkIfFull(creep, resource) {
+        if (creep.memory.status === "fetchingResource") {
+            if (creep.store.getFreeCapacity(resource) === 0) {
+                if (creep.store.getCapacity(resource) === creep.store[resource]) {
+                    creep.memory.status = "working";
+                }
+                else {
+                    if (creep.store.getFreeCapacity(resource) === 0) {
+                        Object.entries(creep.store).forEach(([resourceType]) => {
+                            if (resourceType !== resource) {
+                                if (resourceType === RESOURCE_ENERGY) {
+                                    if (creep.room.storage) {
+                                        this.depositResource(creep, creep.room.storage, resourceType);
+                                    }
+                                }
+                                else {
+                                    if (creep.room.terminal) {
+                                        this.depositResource(creep, creep.room.terminal, resourceType);
+                                    }
+                                    else {
+                                        creep.drop(resourceType);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+        }
+        else if (creep.memory.status === "working") {
+            if (creep.store[resource] === 0 && creep.store.getFreeCapacity(resource) > 0) {
+                creep.memory.status = "fetchingResource";
+            }
+        }
+    }
+    boostBodyParts(creep, bodyPart, mineral) {
+        const creepSpecificBodyPartCount = creep.body.filter(creepBodyPart => creepBodyPart.type === bodyPart).length;
+        const creepSpecificBoostedBodyPartCount = creep.body.filter(creepBodyPart => creepBodyPart.type === bodyPart && creepBodyPart.boost === mineral).length;
+        if (creepSpecificBodyPartCount !== creepSpecificBoostedBodyPartCount) {
+            const mineralString = mineral.toString().toUpperCase();
+            const labsWithMineral = Object.entries(creep.room.memory.monitoring.structures.labs).filter(([, labMonitorMemory]) => labMonitorMemory.resources[mineralString]);
+            if (!creep.spawning) {
+                if (labsWithMineral.length > 0) {
+                    const labId = labsWithMineral[0][0];
+                    const lab = Game.getObjectById(labId);
+                    if (lab) {
+                        if (lab.store[RESOURCE_ENERGY] > LAB_ENERGY_CAPACITY / 10) {
+                            creep.memory.status = "fetchingBoosts";
+                            const boostResult = lab.boostCreep(creep);
+                            if (boostResult === ERR_NOT_IN_RANGE) {
+                                this.moveCreep(creep, lab.pos);
+                            }
+                            else {
+                                if (boostResult !== OK) {
+                                    Log.Warning(`${creep.name} in ${creep.room.name} has encountered a ${boostResult} error code while trying to boost bodyparts with the mineral ${mineral}`);
+                                }
+                                else {
+                                    creep.memory.status = "working";
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            if (creep.memory.status === "fetchingBoosts") {
+                creep.memory.status = "working";
+            }
+        }
+    }
+    checkBodyParts(creep) {
+        const jobType = creep.memory.jobType;
+        const creepBodyParts = [];
+        creep.body.forEach(bodyPartArray => {
+            creepBodyParts.push(bodyPartArray.type);
+        });
+        const desiredCreepBodyParts = fetchBodyParts(jobType, creep.memory.room);
+        if (creepBodyParts !== desiredCreepBodyParts) {
+            if (fetchBodyPartCost(desiredCreepBodyParts) > fetchBodyPartCost(creepBodyParts)) {
+                creep.memory.status = "recyclingCreep";
+            }
+        }
+    }
+    moveHome(creep) {
+        if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
+            if (creep.pos.roomName !== creep.memory.room) {
+                creep.memory.status = "movingIntoRoom";
+            }
+        }
+        if (creep.memory.status === "movingIntoRoom") {
+            if (creep.pos.roomName === creep.memory.room) {
+                delete creep.memory.safeRoute;
+                creep.memory.status = "working";
+            }
+            else {
+                // this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
+                if (!creep.memory.safeRoute) {
+                    creep.memory.safeRoute = this.fetchSafePath(creep, creep.memory.room);
+                }
+                this.moveCreep(creep, creep.memory.safeRoute[0]);
+            }
+        }
+    }
+    fetchSafePath(creep, destinationRoomName) {
+        const safeRoute = [];
+        const safeExits = findPath.findSafePathToRoom(creep.pos.roomName, destinationRoomName);
+        if (safeExits !== -2) {
+            Object.entries(safeExits).forEach(([roomExitArrayIndexString, roomExitArrayDictionary]) => {
+                const roomExitArrayIndexUnknown = roomExitArrayIndexString;
+                const roomExitArrayIndex = roomExitArrayIndexUnknown;
+                const roomPositionCoordinates = findPath.findClearTerrain(roomExitArrayDictionary.room);
+                safeRoute[roomExitArrayIndex] = roomPositionCoordinates;
+            });
+        }
+        return safeRoute;
+    }
+    moveCreep(creep, destination) {
+        let nextDestination = new RoomPosition(destination.x, destination.y, destination.roomName);
+        if (creep.pos.roomName !== destination.roomName) {
+            if (!creep.memory.safeRoute) {
+                creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
+            }
+        }
+        if (creep.memory.safeRoute) {
+            if (Object.entries(creep.memory.safeRoute).length > 1) {
+                if (creep.memory.safeRoute[0].roomName === creep.pos.roomName) {
+                    const newCreepSafeRouteMemory = Object.entries(creep.memory.safeRoute).splice(0, 1);
+                    const creepSafeRouteArray = [];
+                    newCreepSafeRouteMemory.forEach(([, safeRouteRoomPosition]) => {
+                        creepSafeRouteArray.push(safeRouteRoomPosition);
+                    });
+                    creep.memory.safeRoute = creepSafeRouteArray;
+                    nextDestination = new RoomPosition(creep.memory.safeRoute[0].x, creep.memory.safeRoute[0].y, creep.memory.safeRoute[0].roomName);
+                }
+            }
+            if (Object.entries(creep.memory.safeRoute).length === 1) {
+                if (creep.pos.roomName === creep.memory.safeRoute[0].roomName) {
+                    delete creep.memory.safeRoute;
+                }
+                else {
+                    nextDestination = new RoomPosition(creep.memory.safeRoute[0].x, creep.memory.safeRoute[0].y, creep.memory.safeRoute[0].roomName);
+                }
+            }
+        }
+        const moveResult = creep.moveTo(nextDestination, {
+            visualizePathStyle: {
+                fill: "transparent",
+                stroke: movePathColors[creep.memory.jobType],
+                lineStyle: "dotted",
+                strokeWidth: 0.1,
+                opacity: 0.66
+            }
+        });
+        return moveResult;
+    }
+    harvestSource(creep, source) {
+        const harvestResult = creep.harvest(source);
+        if (harvestResult === ERR_NOT_IN_RANGE) {
+            const moveResult = this.moveCreep(creep, source.pos);
+            return moveResult;
+        }
+        else {
+            return harvestResult;
+        }
+    }
+    pickupResource(creep, origin) {
+        const pickupResult = creep.pickup(origin);
+        if (pickupResult === ERR_NOT_IN_RANGE) {
+            const moveResult = this.moveCreep(creep, origin.pos);
+            return moveResult;
+        }
+        else
+            return pickupResult;
+    }
+    withdrawResource(creep, origin, resource) {
+        const withdrawResult = creep.withdraw(origin, resource);
+        if (withdrawResult === ERR_NOT_IN_RANGE) {
+            const moveResult = this.moveCreep(creep, origin.pos);
+            return moveResult;
+        }
+        else
+            return withdrawResult;
+    }
+    fetchSource(creep, forceStorage = false) {
+        const linkDistances = {};
+        let sortedLinkDistances = [];
+        let storageUsable = false;
+        let linksUsable = false;
+        let useStorage = false;
+        let useLinks = false;
+        if (forceStorage) {
+            useStorage = true;
+        }
+        else {
+            if (creep.room.memory.monitoring.structures.links) {
+                if (Object.entries(creep.room.memory.monitoring.structures.links).filter(([, cachedLink]) => cachedLink.mode === "rx" && cachedLink.energy.energyAvailable > 0).length > 0) {
+                    linksUsable = true;
+                }
+            }
+            if (creep.room.memory.monitoring.structures.storage) {
+                if (creep.room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY]) {
+                    if (creep.room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY].resourceAmount >=
+                        creep.store.getFreeCapacity(RESOURCE_ENERGY)) {
+                        storageUsable = true;
+                    }
+                }
+            }
+        }
+        if (storageUsable || linksUsable) {
+            if (!linksUsable) {
+                useStorage = true;
+            }
+            else {
+                if (!storageUsable) {
+                    useLinks = true;
+                }
+                else {
+                    Object.entries(creep.room.memory.monitoring.structures.links)
+                        .filter(([, cachedLink]) => cachedLink.mode === "rx" && cachedLink.energy.energyAvailable > 0)
+                        .forEach(([cachedLinkIdString]) => {
+                        const cachedLinkId = cachedLinkIdString;
+                        const cachedLink = Game.getObjectById(cachedLinkId);
+                        if (cachedLink) {
+                            linkDistances[cachedLinkId] = creep.pos.getRangeTo(cachedLink);
+                        }
+                    });
+                    if (Object.entries(linkDistances).length > 0) {
+                        sortedLinkDistances = Object.entries(linkDistances).sort(([, linkDistanceA], [, linkDistanceB]) => linkDistanceA - linkDistanceB);
+                        if (sortedLinkDistances[0]) {
+                            if (creep.room.storage) {
+                                const storageDistance = creep.pos.getRangeTo(creep.room.storage.pos);
+                                if (storageDistance <= sortedLinkDistances[0][1]) {
+                                    useStorage = true;
+                                }
+                                else {
+                                    useLinks = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (useLinks === true) {
+            if (Object.entries(sortedLinkDistances)[0]) {
+                const linkId = sortedLinkDistances[0][0];
+                const link = Game.getObjectById(linkId);
+                if (link) {
+                    this.withdrawResource(creep, link, RESOURCE_ENERGY);
+                }
+            }
+        }
+        else {
+            if (useStorage === true) {
+                if (creep.room.memory.monitoring.structures.storage) {
+                    const storageId = creep.room.memory.monitoring.structures.storage.id;
+                    const storage = Game.getObjectById(storageId);
+                    if (storage) {
+                        this.withdrawResource(creep, storage, RESOURCE_ENERGY);
+                    }
+                }
+            }
+            else {
+                const droppedResourceArray = [];
+                Object.entries(creep.room.memory.monitoring.droppedResources)
+                    .filter(DroppedResource => DroppedResource[1].resourceType === RESOURCE_ENERGY)
+                    .forEach(([droppedResourceId]) => {
+                    const droppedResource = Game.getObjectById(droppedResourceId);
+                    if (droppedResource) {
+                        droppedResourceArray.push(droppedResource);
+                    }
+                });
+                if (droppedResourceArray.length > 0) {
+                    const closestDroppedEnergy = creep.pos.findClosestByPath(droppedResourceArray);
+                    if (closestDroppedEnergy) {
+                        this.pickupResource(creep, closestDroppedEnergy);
+                    }
+                }
+                else {
+                    if (Object.entries(creep.body).filter(([, bodyPart]) => bodyPart.type === WORK)) {
+                        const sourceArray = [];
+                        Object.entries(creep.room.memory.monitoring.sources).forEach(([sourceId]) => {
+                            const source = Game.getObjectById(sourceId);
+                            if (source) {
+                                if (source.energy <= source.energyCapacity) {
+                                    sourceArray.push(source);
+                                }
+                            }
+                        });
+                        if (sourceArray.length > 0) {
+                            const closestSource = creep.pos.findClosestByPath(sourceArray);
+                            if (closestSource) {
+                                this.harvestSource(creep, closestSource);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    depositResource(creep, destination, resource) {
+        const depositResult = creep.transfer(destination, resource);
+        if (depositResult === ERR_NOT_IN_RANGE) {
+            const moveResult = this.moveCreep(creep, destination.pos);
+            return moveResult;
+        }
+        else
+            return depositResult;
+    }
+    healCreep(creep, targetCreep) {
+        if (!targetCreep) {
+            targetCreep = creep;
+        }
+        const healResult = creep.heal(targetCreep);
+        if (healResult === ERR_NOT_IN_RANGE) {
+            this.moveCreep(creep, targetCreep.pos);
+        }
+        else {
+            if (healResult !== OK) {
+                Log.Alert(`${creep.name} in room ${creep.pos.roomName} tried to heal ${targetCreep.name} in room ${targetCreep.pos.roomName}, but failed with a result of ${healResult}`);
+            }
+        }
+    }
+    attackCreep(creep, targetCreep) {
+        const attackResult = creep.attack(targetCreep);
+        if (attackResult === ERR_NOT_IN_RANGE) {
+            this.moveCreep(creep, targetCreep.pos);
+        }
+        else {
+            if (attackResult !== OK) {
+                Log.Alert(`${creep.name} in room ${creep.pos.roomName} tried to attack ${targetCreep.name} in room ${targetCreep.pos.roomName}, but failed with a result of ${attackResult}`);
+            }
+        }
+    }
+    lookAroundCreep(creep) {
+        creep.pos;
+        const lookAreaBoundaryCoordinateArray = [
+            [creep.pos.x - 1, creep.pos.y + 1],
+            [creep.pos.x, creep.pos.y + 1],
+            [creep.pos.x + 1, creep.pos.y + 1],
+            [creep.pos.x - 1, creep.pos.y],
+            [creep.pos.x, creep.pos.y],
+            [creep.pos.x + 1, creep.pos.y],
+            [creep.pos.x - 1, creep.pos.y - 1],
+            [creep.pos.x, creep.pos.y - 1],
+            [creep.pos.x + 1, creep.pos.y - 1]
+        ];
+        const lookResults = [];
+        lookAreaBoundaryCoordinateArray.forEach(([lookAreaBoundaryCoordinateX, lookAreaBoundaryCoordinateY]) => {
+            lookResults.push(creep.room.lookAt(lookAreaBoundaryCoordinateX, lookAreaBoundaryCoordinateY));
+        });
+        return lookResults;
+    }
+};
+BaseCreep = __decorate([
+    profile
+], BaseCreep);
+
+let BuildConstructionSiteCreep = class BuildConstructionSiteCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.moveHome(creep);
+        if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
+            this.checkIfFull(creep, RESOURCE_ENERGY);
+        }
+        if (creep.memory.status === "working") {
+            const constructionSites = Object.entries(Memory.rooms[creep.memory.room].monitoring.constructionSites).sort(([, constructionSiteMemoryA], [, constructionSiteMemoryB]) => 
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/restrict-plus-operands, @typescript-eslint/no-unsafe-return
+            constructionSiteMemoryB.progress / constructionSiteMemoryB.total -
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/restrict-plus-operands, @typescript-eslint/no-unsafe-return
+                constructionSiteMemoryA.progress / constructionSiteMemoryA.total);
+            if (constructionSites[0]) {
+                const constructionSiteId = constructionSites[0][0];
+                if (constructionSiteId) {
+                    const constructionSite = Game.getObjectById(constructionSiteId);
+                    if (constructionSite) {
+                        this.buildConstructionSite(creep, constructionSite);
+                    }
+                    else {
+                        this.moveCreep(creep, findPath.findClearTerrain(creep.memory.room));
+                    }
+                }
+            }
+        }
+        else if (creep.memory.status === "fetchingResource") {
+            this.fetchSource(creep);
+        }
+    }
+    buildConstructionSite(creep, constructionSite) {
+        const upgradeResult = creep.build(constructionSite);
+        if (upgradeResult === ERR_NOT_IN_RANGE) {
+            const moveResult = this.moveCreep(creep, constructionSite.pos);
+            return moveResult;
+        }
+        else {
+            return upgradeResult;
+        }
+    }
+};
+BuildConstructionSiteCreep = __decorate([
+    profile
+], BuildConstructionSiteCreep);
+
+let ClaimRoomCreep = class ClaimRoomCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.moveHome(creep);
+        if (creep.memory.status === "working") {
+            if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
+                const controllerToClaimMemory = Memory.rooms[creep.memory.room].monitoring.structures.controller;
+                if (controllerToClaimMemory) {
+                    const controllerToClaimId = controllerToClaimMemory.id;
+                    if (controllerToClaimId) {
+                        const controllerToClaim = Game.getObjectById(controllerToClaimId);
+                        if (controllerToClaim) {
+                            const claimResult = creep.claimController(controllerToClaim);
+                            if (claimResult === ERR_NOT_IN_RANGE) {
+                                this.moveCreep(creep, controllerToClaim.pos);
+                            }
+                            else if (claimResult === ERR_NOT_OWNER) {
+                                const attackControllerResult = creep.attackController(controllerToClaim);
+                                if (attackControllerResult === ERR_NOT_IN_RANGE) {
+                                    this.moveCreep(creep, controllerToClaim.pos);
+                                }
+                                else {
+                                    Log.Warning(`Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`);
+                                }
+                            }
+                            else
+                                Log.Warning(`Claim Result for ${creep.name} in ${creep.pos.roomName}: ${claimResult}`);
+                        }
+                    }
+                }
+            }
+        }
+    }
+};
+ClaimRoomCreep = __decorate([
+    profile
+], ClaimRoomCreep);
+
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+function fetchHostileCreep(room) {
+    const cachedHostiles = Object.entries(room.memory.monitoring.hostiles);
+    if (cachedHostiles.length === 1) {
+        const hostileIdUnknown = cachedHostiles[0][0];
+        const hostileId = hostileIdUnknown;
+        const hostile = Game.getObjectById(hostileId);
+        if (hostile) {
+            return hostile;
+        }
+    }
+    else {
+        if (cachedHostiles.length > 1) {
+            const cachedHostilesThatHeal = cachedHostiles.filter(([, cachedHostileMemory]) => cachedHostileMemory.bodyParts.includes(HEAL) === true);
+            if (cachedHostilesThatHeal.length === 1) {
+                const hostileIdUnknown = cachedHostilesThatHeal[0][0];
+                const hostileId = hostileIdUnknown;
+                const hostile = Game.getObjectById(hostileId);
+                if (hostile) {
+                    return hostile;
+                }
+            }
+            else {
+                if (cachedHostilesThatHeal.length > 1) {
+                    const cachedHostilesThatHealLowestHP = cachedHostiles.sort(([, cachedHostileMemoryA], [, cachedHostileMemoryB]) => cachedHostileMemoryA.health.hits - cachedHostileMemoryB.health.hits);
+                    const hostileIdUnknown = cachedHostilesThatHealLowestHP[0][0];
+                    const hostileId = hostileIdUnknown;
+                    const hostile = Game.getObjectById(hostileId);
+                    if (hostile) {
+                        return hostile;
+                    }
+                }
+            }
+        }
+    }
+    return undefined;
+}
+
+let DefendRoomCreep = class DefendRoomCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        if (Object.entries(creep.body).filter(([, bodyPart]) => bodyPart.type === HEAL).length > 0) {
+            if (creep.hits < creep.hitsMax) {
+                this.healCreep(creep);
+            }
+        }
+        if (creep.memory.status !== "recyclingCreep") {
+            this.moveHome(creep);
+            if (creep.memory.status === "working") {
+                const hostileCreep = fetchHostileCreep(creep.room);
+                if (hostileCreep) {
+                    this.attackCreep(creep, hostileCreep);
+                }
+                else {
+                    creep.memory.status = "recyclingCreep";
+                }
+            }
+        }
+    }
+};
+DefendRoomCreep = __decorate([
+    profile
+], DefendRoomCreep);
+
+let DismantleEnemyBuildingsCreep = class DismantleEnemyBuildingsCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.moveHome(creep);
+        if (creep.memory.status === "working") {
+            let buildingToDismantle;
+            if (creep.room.name === creep.memory.room) {
+                if (creep.room.memory.monitoring.structures.spawns) {
+                    const cachedSpawnsInRoomDictionary = Object.entries(creep.room.memory.monitoring.structures.spawns);
+                    if (cachedSpawnsInRoomDictionary.length > 0) {
+                        if (cachedSpawnsInRoomDictionary.length === 1) {
+                            const spawnToDismantleId = cachedSpawnsInRoomDictionary[0][1].id;
+                            const spawnToDismantle = Game.getObjectById(spawnToDismantleId);
+                            if (spawnToDismantle) {
+                                buildingToDismantle = spawnToDismantle;
+                            }
+                        }
+                    }
+                    else {
+                        const manualRampartToKill = Game.getObjectById("63341e08b0485dbcf5342fd4");
+                        if (manualRampartToKill) {
+                            buildingToDismantle = manualRampartToKill;
+                        }
+                    }
+                }
+            }
+            if (buildingToDismantle) {
+                const dismantleResult = creep.dismantle(buildingToDismantle);
+                if (dismantleResult === ERR_NOT_IN_RANGE) {
+                    this.moveCreep(creep, buildingToDismantle.pos);
+                }
+                else {
+                    if (dismantleResult !== OK) {
+                        Log.Alert(`${creep.name} in ${creep.room.name} encountered a ${dismantleResult} error while attempting to dismantle ${buildingToDismantle.structureType} - ${buildingToDismantle.id}`);
+                    }
+                }
+            }
+        }
+    }
+};
+DismantleEnemyBuildingsCreep = __decorate([
+    profile
+], DismantleEnemyBuildingsCreep);
+
+let FactoryEngineerCreep = class FactoryEngineerCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        if (creep.memory.status === "awaitingJob") {
+            if (Object.entries(creep.room.memory.queues.factoryQueue).length > 0) {
+                this.assignFactoryJob(creep);
+            }
+            else {
+                this.deassignFactoryJob(creep);
+            }
+        }
+        if (creep.memory.status !== "awaitingJob") {
+            if (creep.memory.factoryJobUUID) {
+                const nextJobParameters = creep.room.memory.queues.factoryQueue[creep.memory.factoryJobUUID];
+                if (nextJobParameters) {
+                    // Mux FactoryJobs
+                    switch (nextJobParameters.factoryJobType) {
+                        case "feedFactoryEnergy":
+                            this.runFeedFactoryEnergyJob(creep);
+                            break;
+                        default:
+                            Log.Alert(
+                            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+                            `FactoryEngineer ${creep.name} in room ${creep.room.name} cannot understand the factoryJobType: ${nextJobParameters.factoryJobType}`);
+                            break;
+                    }
+                }
+                else {
+                    this.deassignFactoryJob(creep);
+                }
+            }
+        }
+    }
+    assignFactoryJob(creep) {
+        const factoryJobs = Object.entries(creep.room.memory.queues.factoryQueue);
+        const nextFactoryJobUUID = factoryJobs.sort(([, factoryJobMemoryA], [, factoryJobMemoryB]) => factoryJobMemoryA.priority - factoryJobMemoryB.priority)[0][0];
+        creep.memory.factoryJobUUID = nextFactoryJobUUID;
+        creep.memory.status = "working";
+    }
+    deassignFactoryJob(creep) {
+        delete creep.memory.factoryJobUUID;
+        creep.memory.status = "awaitingJob";
+    }
+    runFeedFactoryEnergyJob(creep) {
+        this.checkIfFull(creep, RESOURCE_ENERGY);
+        if (creep.memory.status === "fetchingResource") {
+            this.fetchSource(creep, true);
+        }
+        else if (creep.memory.status === "working") {
+            const factoryMemory = creep.room.memory.monitoring.structures.factory;
+            if (factoryMemory) {
+                const factory = Game.getObjectById(factoryMemory.id);
+                if (factory) {
+                    this.depositResource(creep, factory, RESOURCE_ENERGY);
+                }
+            }
+        }
+    }
+};
+FactoryEngineerCreep = __decorate([
+    profile
+], FactoryEngineerCreep);
+
+let FeedLinkCreep = class FeedLinkCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.checkIfFull(creep, RESOURCE_ENERGY);
+        if (creep.memory.status === "fetchingResource") {
+            // Second argument forces use of storage
+            this.fetchSource(creep, true);
+        }
+        else if (creep.memory.status === "working") {
+            if (creep.memory.linkId) {
+                const link = Game.getObjectById(creep.memory.linkId);
+                if (link) {
+                    this.depositResource(creep, link, RESOURCE_ENERGY);
+                }
+            }
+        }
+    }
+};
+FeedLinkCreep = __decorate([
+    profile
+], FeedLinkCreep);
+
+let FeedSpawnCreep = class FeedSpawnCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.checkIfFull(creep, RESOURCE_ENERGY);
+        if (creep.memory.status === "fetchingResource") {
+            this.fetchSource(creep);
+        }
+        else {
+            if (creep.memory.status === "working") {
+                const notFullSpawnObjectArray = [];
+                if (creep.room.memory.monitoring.structures.spawns) {
+                    Object.entries(creep.room.memory.monitoring.structures.spawns)
+                        .filter(Spawn => Game.spawns[Spawn[0]].room === creep.room &&
+                        Game.spawns[Spawn[0]].store[RESOURCE_ENERGY] < Game.spawns[Spawn[0]].store.getCapacity(RESOURCE_ENERGY))
+                        .forEach(([spawnName]) => {
+                        const spawn = Game.spawns[spawnName];
+                        notFullSpawnObjectArray.push(spawn);
+                    });
+                }
+                if (creep.room.memory.monitoring.structures.extensions) {
+                    Object.entries(creep.room.memory.monitoring.structures.extensions)
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                        .filter(([, ExtensionMemory]) => ExtensionMemory.energyAvailable < ExtensionMemory.energyCapacity)
+                        .forEach(([extensionIdString]) => {
+                        const extensionId = extensionIdString;
+                        const extension = Game.getObjectById(extensionId);
+                        if (extension) {
+                            notFullSpawnObjectArray.push(extension);
+                        }
+                    });
+                }
+                const closestNotFullSpawnObject = creep.pos.findClosestByPath(notFullSpawnObjectArray);
+                if (closestNotFullSpawnObject) {
+                    this.depositResource(creep, closestNotFullSpawnObject, RESOURCE_ENERGY);
+                }
+            }
+        }
+    }
+};
+FeedSpawnCreep = __decorate([
+    profile
+], FeedSpawnCreep);
+
+let FeedTowerCreep = class FeedTowerCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        if (creep.memory.towerId) {
+            const tower = Game.getObjectById(creep.memory.towerId);
+            if (tower) {
+                if (creep.memory.status === "recyclingCreep") {
+                    creep.memory.status = "working";
+                }
+                this.checkIfFull(creep, RESOURCE_ENERGY);
+                if (creep.memory.status === "fetchingResource") {
+                    this.fetchSource(creep);
+                }
+                else {
+                    if (creep.memory.status === "working") {
+                        this.depositResource(creep, tower, RESOURCE_ENERGY);
+                    }
+                }
+            }
+        }
+    }
+};
+FeedTowerCreep = __decorate([
+    profile
+], FeedTowerCreep);
+
+let LabEngineerCreep = class LabEngineerCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        if (creep.memory.status === "awaitingJob") {
+            if (Object.entries(creep.room.memory.queues.labQueue).length > 0) {
+                this.assignLabJob(creep);
+            }
+            else {
+                this.deassignLabJob(creep);
+            }
+        }
+        if (creep.memory.status !== "awaitingJob") {
+            if (creep.memory.labJobUUID) {
+                const nextJobParameters = creep.room.memory.queues.labQueue[creep.memory.labJobUUID];
+                if (nextJobParameters) {
+                    // Mux LabJobs
+                    switch (nextJobParameters.labJobType) {
+                        case "feedLabEnergy":
+                            this.runFeedLabEnergyJob(creep);
+                            break;
+                        case "feedLabXGH20":
+                            this.runFeedLabXGH20Job(creep);
+                            break;
+                        default:
+                            Log.Alert(
+                            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+                            `LabEngineer ${creep.name} in room ${creep.room.name} cannot understand the labJobType: ${nextJobParameters.labJobType}`);
+                            break;
+                    }
+                }
+                else {
+                    this.deassignLabJob(creep);
+                }
+            }
+        }
+    }
+    assignLabJob(creep) {
+        const labJobs = Object.entries(creep.room.memory.queues.labQueue);
+        const nextLabJobUUID = labJobs.sort(([, labJobMemoryA], [, labJobMemoryB]) => labJobMemoryA.priority - labJobMemoryB.priority)[0][0];
+        creep.memory.labJobUUID = nextLabJobUUID;
+        creep.memory.status = "working";
+    }
+    deassignLabJob(creep) {
+        delete creep.memory.labJobUUID;
+        creep.memory.status = "awaitingJob";
+    }
+    runFeedLabEnergyJob(creep) {
+        this.checkIfFull(creep, RESOURCE_ENERGY);
+        if (creep.memory.status === "fetchingResource") {
+            this.fetchSource(creep, true);
+        }
+        else if (creep.memory.status === "working") {
+            if (creep.memory.labJobUUID) {
+                const lab = Game.getObjectById(creep.room.memory.queues.labQueue[creep.memory.labJobUUID].labId);
+                if (lab) {
+                    this.depositResource(creep, lab, RESOURCE_ENERGY);
+                }
+            }
+        }
+    }
+    runFeedLabXGH20Job(creep) {
+        this.checkIfFull(creep, RESOURCE_CATALYZED_GHODIUM_ACID);
+        if (creep.memory.status === "fetchingResource") {
+            if (creep.room.terminal) {
+                this.withdrawResource(creep, creep.room.terminal, RESOURCE_CATALYZED_GHODIUM_ACID);
+            }
+        }
+        else if (creep.memory.status === "working") {
+            if (creep.memory.labJobUUID) {
+                const lab = Game.getObjectById(creep.room.memory.queues.labQueue[creep.memory.labJobUUID].labId);
+                if (lab) {
+                    this.depositResource(creep, lab, RESOURCE_CATALYZED_GHODIUM_ACID);
+                }
+            }
+        }
+    }
+};
+LabEngineerCreep = __decorate([
+    profile
+], LabEngineerCreep);
+
+let LootResourceCreep = class LootResourceCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.checkIfFull(creep, RESOURCE_ENERGY);
+        if (creep.memory.status === "fetchingResource") {
+            const resourceArray = [];
+            Object.entries(creep.room.memory.monitoring.droppedResources)
+                .sort(([, droppedResourceEntryA], [, droppedResourceEntryB]) => droppedResourceEntryB.amount - droppedResourceEntryA.amount)
+                .forEach(([resourceIdString]) => {
+                const resourceId = resourceIdString;
+                const resource = Game.getObjectById(resourceId);
+                if (resource) {
+                    resourceArray.push(resource);
+                }
+            });
+            const nextResource = resourceArray[0];
+            if (nextResource) {
+                this.pickupResource(creep, nextResource);
+            }
+        }
+        else if (creep.memory.status === "working") {
+            if (creep.room.memory.monitoring.structures.storage) {
+                const storage = Game.getObjectById(creep.room.memory.monitoring.structures.storage.id);
+                if (storage) {
+                    Object.entries(creep.store).forEach(([resourceConstantString]) => {
+                        const resourceConstant = resourceConstantString;
+                        this.depositResource(creep, storage, resourceConstant);
+                    });
+                }
+            }
+        }
+    }
+};
+LootResourceCreep = __decorate([
+    profile
+], LootResourceCreep);
+
+let ReserveRoomCreep = class ReserveRoomCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.checkIfRecyclable(creep);
+        if (creep.memory.status !== "recyclingCreep") {
+            this.moveHome(creep);
+        }
+        if (creep.memory.status === "working") {
+            if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
+                const controllerToReserveMemory = Memory.rooms[creep.memory.room].monitoring.structures.controller;
+                if (controllerToReserveMemory) {
+                    const controllerToReserveId = controllerToReserveMemory.id;
+                    if (controllerToReserveId) {
+                        const controllerToReserve = Game.getObjectById(controllerToReserveId);
+                        if (controllerToReserve) {
+                            const reserveResult = creep.reserveController(controllerToReserve);
+                            if (reserveResult === ERR_NOT_IN_RANGE) {
+                                this.moveCreep(creep, controllerToReserve.pos);
+                            }
+                            else if (reserveResult === ERR_INVALID_TARGET) {
+                                const attackControllerResult = creep.attackController(controllerToReserve);
+                                if (attackControllerResult === ERR_NOT_IN_RANGE) {
+                                    this.moveCreep(creep, controllerToReserve.pos);
+                                }
+                                else {
+                                    Log.Warning(`Attack Controller Result for ${creep.name} in ${creep.pos.roomName}: ${attackControllerResult}`);
+                                }
+                            }
+                            else if (reserveResult !== OK) {
+                                Log.Warning(`Reserve Result for ${creep.name} in ${creep.pos.roomName}: ${reserveResult}`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    checkIfRecyclable(creep) {
+        if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
+            const controllerToReserveMemory = Memory.rooms[creep.memory.room].monitoring.structures.controller;
+            if (controllerToReserveMemory) {
+                const controllerToReserveId = controllerToReserveMemory.id;
+                if (controllerToReserveId) {
+                    const controllerToReserve = Game.getObjectById(controllerToReserveId);
+                    if (controllerToReserve) {
+                        if (creep.ticksToLive && controllerToReserve.upgradeBlocked) {
+                            if (creep.ticksToLive < controllerToReserve.upgradeBlocked) {
+                                creep.memory.status = "recyclingCreep";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+};
+ReserveRoomCreep = __decorate([
+    profile
+], ReserveRoomCreep);
+
+let ScoutRoomCreep = class ScoutRoomCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.moveHome(creep);
+        if (creep.memory.status === "working") {
+            this.moveCreep(creep, findPath.findClearTerrain(creep.memory.room));
+        }
+    }
+};
+ScoutRoomCreep = __decorate([
+    profile
+], ScoutRoomCreep);
+
+let SourceMinerCreep = class SourceMinerCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        // this.checkBodyParts(creep);
+        if (creep.memory.status !== "recyclingCreep") {
+            this.moveHome(creep);
+            if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
+                let dropEnergy = true;
+                const creepSurroundings = this.lookAroundCreep(creep);
+                creepSurroundings.forEach(([lookAtResults]) => {
+                    var _a;
+                    if (lookAtResults.type === "structure") {
+                        if (((_a = lookAtResults.structure) === null || _a === void 0 ? void 0 : _a.structureType) === "storage") {
+                            dropEnergy = false;
+                        }
+                    }
+                });
+                if (creep.memory.sourceId) {
+                    const source = Game.getObjectById(creep.memory.sourceId);
+                    if (source) {
+                        this.harvestSource(creep, source);
+                        if (dropEnergy === true) {
+                            creep.drop(RESOURCE_ENERGY);
+                        }
+                        else {
+                            if (creep.room.memory.monitoring.structures.storage) {
+                                const storage = Game.getObjectById(creep.room.memory.monitoring.structures.storage.id);
+                                if (storage) {
+                                    creep.transfer(storage, RESOURCE_ENERGY);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            creep.memory.status = "working";
+        }
+    }
+};
+SourceMinerCreep = __decorate([
+    profile
+], SourceMinerCreep);
+
+let TankRoomCreep = class TankRoomCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.moveHome(creep);
+        if (creep.memory.status === "working") {
+            this.moveCreep(creep, findPath.findClearTerrain(creep.memory.room));
+        }
+    }
+};
+TankRoomCreep = __decorate([
+    profile
+], TankRoomCreep);
+
+let TerminalEngineerCreep = class TerminalEngineerCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        if (creep.memory.status === "awaitingJob") {
+            if (Object.entries(creep.room.memory.queues.terminalQueue).length > 0) {
+                this.assignTerminalJob(creep);
+            }
+            else {
+                this.deassignTerminalJob(creep);
+            }
+        }
+        if (creep.memory.status !== "awaitingJob") {
+            if (creep.memory.terminalJobUUID) {
+                const nextJobParameters = creep.room.memory.queues.terminalQueue[creep.memory.terminalJobUUID];
+                if (nextJobParameters) {
+                    // Mux TerminalJobs
+                    switch (nextJobParameters.terminalJobType) {
+                        case "feedTerminalEnergy":
+                            this.runFeedTerminalEnergyJob(creep);
+                            break;
+                        default:
+                            Log.Alert(
+                            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+                            `TerminalEngineer ${creep.name} in room ${creep.room.name} cannot understand the terminalJobType: ${nextJobParameters.terminalJobType}`);
+                            break;
+                    }
+                }
+                else {
+                    this.deassignTerminalJob(creep);
+                }
+            }
+        }
+    }
+    assignTerminalJob(creep) {
+        const terminalJobs = Object.entries(creep.room.memory.queues.terminalQueue);
+        const nextTerminalJobUUID = terminalJobs.sort(([, terminalJobMemoryA], [, terminalJobMemoryB]) => terminalJobMemoryA.priority - terminalJobMemoryB.priority)[0][0];
+        creep.memory.terminalJobUUID = nextTerminalJobUUID;
+        creep.memory.status = "working";
+    }
+    deassignTerminalJob(creep) {
+        delete creep.memory.terminalJobUUID;
+        creep.memory.status = "awaitingJob";
+    }
+    runFeedTerminalEnergyJob(creep) {
+        this.checkIfFull(creep, RESOURCE_ENERGY);
+        if (creep.memory.status === "fetchingResource") {
+            this.fetchSource(creep, true);
+        }
+        else if (creep.memory.status === "working") {
+            if (creep.room.terminal) {
+                this.depositResource(creep, creep.room.terminal, RESOURCE_ENERGY);
+            }
+        }
+    }
+};
+TerminalEngineerCreep = __decorate([
+    profile
+], TerminalEngineerCreep);
+
+let TransportResourceCreep = class TransportResourceCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.checkIfFull(creep, RESOURCE_ENERGY);
+        if (creep.memory.status === "fetchingResource") {
+            if (creep.pos.roomName !== creep.memory.room) {
+                this.moveHome(creep);
+                creep.memory.status = "fetchingResource";
+            }
+            else {
+                const resourceArray = [];
+                Object.entries(creep.room.memory.monitoring.droppedResources)
+                    .filter(([, resourceMemory]) => resourceMemory.resourceType === creep.memory.resourceType)
+                    .forEach(([resourceIdString]) => {
+                    const resourceId = resourceIdString;
+                    const resource = Game.getObjectById(resourceId);
+                    if (resource) {
+                        resourceArray.push(resource);
+                    }
+                });
+                const nearestResource = creep.pos.findClosestByPath(resourceArray);
+                if (nearestResource) {
+                    this.pickupResource(creep, nearestResource);
+                }
+            }
+        }
+        else if (creep.memory.status === "working") {
+            if (creep.memory.storage) {
+                const storage = Game.getObjectById(creep.memory.storage);
+                if (storage) {
+                    Object.entries(creep.store).forEach(([resourceConstantString]) => {
+                        const resourceConstant = resourceConstantString;
+                        this.depositResource(creep, storage, resourceConstant);
+                    });
+                }
+            }
+        }
+    }
+};
+TransportResourceCreep = __decorate([
+    profile
+], TransportResourceCreep);
+
+let UpgradeControllerCreep = class UpgradeControllerCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        this.boostBodyParts(creep, WORK, RESOURCE_CATALYZED_GHODIUM_ACID);
+        this.moveHome(creep);
+        if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
+            this.checkIfFull(creep, RESOURCE_ENERGY);
+        }
+        if (creep.memory.status === "fetchingResource") {
+            this.fetchSource(creep);
+        }
+        else {
+            if (creep.memory.status === "working") {
+                const controllerId = creep.memory.controllerId;
+                if (controllerId) {
+                    const controller = Game.getObjectById(controllerId);
+                    if (controller) {
+                        this.upgradeController(creep, controller);
+                    }
+                }
+            }
+        }
+    }
+    upgradeController(creep, controller) {
+        const upgradeResult = creep.upgradeController(controller);
+        if (upgradeResult === ERR_NOT_IN_RANGE) {
+            const moveResult = this.moveCreep(creep, controller.pos);
+            return moveResult;
+        }
+        else {
+            return upgradeResult;
+        }
+    }
+};
+UpgradeControllerCreep = __decorate([
+    profile
+], UpgradeControllerCreep);
+
+class CreepOperator {
+    constructor() {
+        Object.entries(Game.creeps).forEach(([, creepToOperate]) => {
+            switch (creepToOperate.memory.jobType) {
+                case "mineSource":
+                    new SourceMinerCreep(creepToOperate);
+                    break;
+                case "feedSpawn":
+                    new FeedSpawnCreep(creepToOperate);
+                    break;
+                case "feedTower":
+                    new FeedTowerCreep(creepToOperate);
+                    break;
+                case "feedLink":
+                    new FeedLinkCreep(creepToOperate);
+                    break;
+                case "upgradeController":
+                    new UpgradeControllerCreep(creepToOperate);
+                    break;
+                case "buildConstructionSite":
+                    new BuildConstructionSiteCreep(creepToOperate);
+                    break;
+                case "lootResource":
+                    new LootResourceCreep(creepToOperate);
+                    break;
+                case "transportResource":
+                    new TransportResourceCreep(creepToOperate);
+                    break;
+                case "scoutRoom":
+                    new ScoutRoomCreep(creepToOperate);
+                    break;
+                case "tankRoom":
+                    new TankRoomCreep(creepToOperate);
+                    break;
+                case "claimRoom":
+                    new ClaimRoomCreep(creepToOperate);
+                    break;
+                case "defendRoom":
+                    new DefendRoomCreep(creepToOperate);
+                    break;
+                case "reserveRoom":
+                    new ReserveRoomCreep(creepToOperate);
+                    break;
+                case "terminalEngineer":
+                    new TerminalEngineerCreep(creepToOperate);
+                    break;
+                case "labEngineer":
+                    new LabEngineerCreep(creepToOperate);
+                    break;
+                case "factoryEngineer":
+                    new FactoryEngineerCreep(creepToOperate);
+                    break;
+                case "dismantleEnemyBuildings":
+                    new DismantleEnemyBuildingsCreep(creepToOperate);
+                    break;
+                default:
+                    Log.Alert(
+                    // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+                    `${creepToOperate.memory.jobType} registered on ${creepToOperate.name} in ${creepToOperate.room.name} does not correspond with any valid jobTypes`);
+            }
+        });
+    }
+}
+
+class FactoryEngineerJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.factoryId}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.factoryId}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "FactoryEngineerJob" for Factory ID: "${this.JobParameters.factoryId}" with the UUID "${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: "awaitingJob",
+                    room: this.JobParameters.room,
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    jobType: "factoryEngineer",
+                    factoryId: this.JobParameters.factoryId
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "factoryEngineer",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "FactoryEngineerJob" for Factory ID: "${this.JobParameters.factoryId}" with the UUID "${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+let FactoryOperator = class FactoryOperator {
+    constructor() {
+        if (Memory.rooms) {
+            Object.entries(Memory.rooms).forEach(([roomName]) => {
+                if (Memory.rooms[roomName]) {
+                    const factoryMemory = Memory.rooms[roomName].monitoring.structures.factory;
+                    if (factoryMemory) {
+                        const factory = Game.getObjectById(factoryMemory.id);
+                        if (factory) {
+                            if (factory.my) {
+                                this.manageFactoryJobs(factory);
+                                this.maintainFactoryEngineerJobs(factory);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    manageFactoryJobs(factory) {
+        if (factory.store[RESOURCE_ENERGY] < FACTORY_CAPACITY / 10 && factory.store.getCapacity(RESOURCE_ENERGY) > 0) {
+            this.createFeedFactoryEnergyJob(factory);
+        }
+        else {
+            this.destroyFeedFactoryEnergyJob(factory);
+        }
+    }
+    createFeedFactoryEnergyJob(factory) {
+        const factoryJobName = "feedFactoryEnergy";
+        const factoryJobUuid = base64.encode(`${factory.id}-${factoryJobName}`);
+        if (factory.room.memory.queues.factoryQueue) {
+            factory.room.memory.queues.factoryQueue[factoryJobUuid] = {
+                factoryJobType: "feedFactoryEnergy",
+                priority: 1
+            };
+        }
+    }
+    destroyFeedFactoryEnergyJob(factory) {
+        const factoryJobName = "feedFactoryEnergy";
+        const factoryJobUuid = base64.encode(`${factory.id}-${factoryJobName}`);
+        if (factory.room.memory.queues.factoryQueue) {
+            if (factory.room.memory.queues.factoryQueue[factoryJobUuid]) {
+                delete factory.room.memory.queues.factoryQueue[factoryJobUuid];
+            }
+        }
+    }
+    maintainFactoryEngineerJobs(factory) {
+        if (factory) {
+            const jobParameters = {
+                room: factory.pos.roomName,
+                status: "awaitingJob",
+                jobType: "factoryEngineer",
+                factoryId: factory.id
+            };
+            let count = creepNumbers[jobParameters.jobType];
+            const factoryJobs = Object.entries(factory.room.memory.queues.factoryQueue);
+            if (factoryJobs.length === 0) {
+                count = 0;
+            }
+            new FactoryEngineerJob(jobParameters, count);
+        }
+    }
+};
+FactoryOperator = __decorate([
+    profile
+], FactoryOperator);
+
+let GameOperator = class GameOperator {
+    constructor() {
+        this.generatePixel();
+    }
+    generatePixel() {
+        if (Game.cpu) {
+            if (Game.cpu.generatePixel && Game.cpu.bucket === 10000) {
+                Game.cpu.generatePixel();
+            }
+        }
+    }
+};
+GameOperator = __decorate([
+    profile
+], GameOperator);
+
+class LabEngineerJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "LabEngineerJob" for Room: "${this.JobParameters.room}" with the UUID "${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: "awaitingJob",
+                    room: this.JobParameters.room,
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    jobType: "labEngineer"
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "labEngineer",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "LabEngineerJob" for Room: "${this.JobParameters.room}" with the UUID "${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+const labConfiguration = {
+    W56N12: {
+        boostLab: "63a1e52f46d2f61382721fbf"
+    }
+};
+
+let LabOperator = class LabOperator {
+    constructor() {
+        if (Memory.rooms) {
+            Object.entries(Memory.rooms).forEach(([roomName]) => {
+                Object.entries(Memory.rooms[roomName].monitoring.structures.labs).forEach(([labIdString]) => {
+                    const labId = labIdString;
+                    const lab = Game.getObjectById(labId);
+                    if (lab) {
+                        if (lab.my) {
+                            this.manageLabJobs(lab);
+                        }
+                    }
+                });
+                this.maintainLabEngineerJobs(roomName);
+            });
+        }
+    }
+    manageLabJobs(lab) {
+        var _a;
+        if (lab.store[RESOURCE_ENERGY] < LAB_ENERGY_CAPACITY) {
+            this.createFeedLabEnergyJob(lab);
+        }
+        else {
+            this.destroyFeedLabEnergyJob(lab);
+        }
+        if (labConfiguration[lab.pos.roomName]) {
+            if (lab.id === labConfiguration[lab.pos.roomName].boostLab) {
+                if (lab.room.terminal) {
+                    if (((_a = lab.room.terminal) === null || _a === void 0 ? void 0 : _a.store[RESOURCE_CATALYZED_GHODIUM_ACID]) > 0 &&
+                        lab.store.getFreeCapacity(RESOURCE_CATALYZED_GHODIUM_ACID) > 0) {
+                        this.createFeedLabXGH20Job(lab);
+                    }
+                    else {
+                        this.destroyFeedLabXGH20Job(lab);
+                    }
+                }
+            }
+        }
+    }
+    createFeedLabEnergyJob(lab) {
+        const labJobName = "feedLabEnergy";
+        const labJobUuid = base64.encode(`${lab.id}-${labJobName}`);
+        if (lab.room.memory.queues.labQueue) {
+            lab.room.memory.queues.labQueue[labJobUuid] = {
+                labId: lab.id,
+                labJobType: "feedLabEnergy",
+                priority: 1
+            };
+        }
+    }
+    destroyFeedLabEnergyJob(lab) {
+        const labJobName = "feedLabEnergy";
+        const labJobUuid = base64.encode(`${lab.id}-${labJobName}`);
+        if (lab.room.memory.queues.labQueue) {
+            if (lab.room.memory.queues.labQueue[labJobUuid]) {
+                delete lab.room.memory.queues.labQueue[labJobUuid];
+            }
+        }
+    }
+    createFeedLabXGH20Job(lab) {
+        const labJobName = "feedLabXGH20";
+        const labJobUuid = base64.encode(`${lab.id}-${labJobName}`);
+        if (lab.room.memory.queues.labQueue) {
+            lab.room.memory.queues.labQueue[labJobUuid] = {
+                labId: lab.id,
+                labJobType: "feedLabXGH20",
+                priority: 2
+            };
+        }
+    }
+    destroyFeedLabXGH20Job(lab) {
+        const labJobName = "feedLabXGH20";
+        const labJobUuid = base64.encode(`${lab.id}-${labJobName}`);
+        if (lab.room.memory.queues.labQueue) {
+            if (lab.room.memory.queues.labQueue[labJobUuid]) {
+                delete lab.room.memory.queues.labQueue[labJobUuid];
+            }
+        }
+    }
+    maintainLabEngineerJobs(roomName) {
+        if (Object.entries(Memory.rooms[roomName].monitoring.structures.labs).length > 0) {
+            const jobParameters = {
+                room: roomName,
+                status: "awaitingJob",
+                jobType: "labEngineer"
+            };
+            let count = creepNumbers[jobParameters.jobType];
+            const labJobs = Object.entries(Memory.rooms[roomName].queues.labQueue);
+            if (labJobs.length === 0) {
+                count = 0;
+            }
+            new LabEngineerJob(jobParameters, count);
+        }
+    }
+};
+LabOperator = __decorate([
+    profile
+], LabOperator);
+
+class FeedLinkJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.linkId}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.linkId}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "FeedLinkJob" for Link ID "${this.JobParameters.linkId} with the UUID of ${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: "fetchingResource",
+                    room: this.JobParameters.room,
+                    jobType: "feedLink",
+                    linkId: this.JobParameters.linkId
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "feedLink",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting "FeedLinkJob" for Link ID "${this.JobParameters.linkId} with the UUID of ${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
+let LinkOperator = class LinkOperator {
+    constructor() {
+        this.operateLinks();
+    }
+    operateLinks() {
+        Object.entries(Memory.rooms).forEach(([roomName]) => {
+            if (Memory.rooms[roomName].monitoring.structures.links) {
+                Object.entries(Memory.rooms[roomName].monitoring.structures.links).forEach(([linkIdString]) => {
+                    const linkId = linkIdString;
+                    const link = Game.getObjectById(linkId);
+                    const linkMode = Memory.rooms[roomName].monitoring.structures.links[linkId].mode;
+                    if (linkMode === "tx" && link) {
+                        if (link.my) {
+                            this.createLinkFeederJob(link);
+                            this.transmitEnergy(link);
+                        }
+                    }
+                });
+            }
+        });
+    }
+    transmitEnergy(txLink) {
+        if (txLink.store[RESOURCE_ENERGY] === txLink.store.getCapacity(RESOURCE_ENERGY)) {
+            if (txLink.cooldown === 0) {
+                const linkIdsThatCanRecieveEnergy = Object.entries(Memory.rooms[txLink.pos.roomName].monitoring.structures.links)
+                    .filter(([, linkMonitorMemory]) => linkMonitorMemory.mode === "rx" &&
+                    linkMonitorMemory.energy.energyAvailable < linkMonitorMemory.energy.energyCapacity)
+                    .sort(([, linkMonitorMemoryA], [, linkMonitorMemoryB]) => linkMonitorMemoryA.energy.energyAvailable - linkMonitorMemoryB.energy.energyAvailable);
+                if (linkIdsThatCanRecieveEnergy.length > 0) {
+                    const destinationLinkId = linkIdsThatCanRecieveEnergy[0][0];
+                    const destinationLink = Game.getObjectById(destinationLinkId);
+                    if (destinationLink) {
+                        const transmissionResult = txLink.transferEnergy(destinationLink);
+                        Log.Debug(`${txLink.id} attempted to transmit energy to ${destinationLink.id}, result: ${transmissionResult} `);
+                    }
+                }
+            }
+        }
+    }
+    createLinkFeederJob(link) {
+        const jobParameters = {
+            status: "fetchingResource",
+            room: link.room.name,
+            jobType: "feedLink",
+            linkId: link.id
+        };
+        const count = creepNumbers[jobParameters.jobType];
+        new FeedLinkJob(jobParameters, count);
+    }
+};
+LinkOperator = __decorate([
+    profile
+], LinkOperator);
+
 let JobQueueOperator = class JobQueueOperator {
     constructor() {
         this.processJobs();
@@ -5017,7 +5992,7 @@ function creepPriority(room) {
     if (room) {
         let storageContainsEnergy = false;
         let roomContainsDroppedEnergy = false;
-        let feederCreepAlive = false;
+        let feederCreepDead = false;
         if (room.memory.monitoring.structures.storage) {
             if (room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY]) {
                 if (room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY].resourceAmount >= 300) {
@@ -5028,10 +6003,10 @@ function creepPriority(room) {
         if (Object.entries(room.memory.monitoring.droppedResources).length > 0) {
             roomContainsDroppedEnergy = true;
         }
-        if (Object.entries(Memory.creeps).filter(([, creepMemory]) => creepMemory.jobType === "feedSpawn").length > 0) {
-            feederCreepAlive = true;
+        if (Object.entries(Memory.creeps).filter(([, creepMemory]) => creepMemory.jobType === "feedSpawn").length === 0) {
+            feederCreepDead = true;
         }
-        if (roomContainsDroppedEnergy || storageContainsEnergy || feederCreepAlive) {
+        if (roomContainsDroppedEnergy || storageContainsEnergy || feederCreepDead) {
             priority = {
                 feedSpawn: priority.mineSource,
                 mineSource: priority.feedSpawn,
@@ -5159,7 +6134,11 @@ class ReserveRoomJob {
                 this.deleteJob(jobUUID);
             }
         });
-        if (count === 1) {
+        if (count === 0) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
+            this.deleteJob(UUID);
+        }
+        else if (count === 1) {
             const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
             this.createJob(UUID, 1);
         }
@@ -5247,9 +6226,10 @@ class ScoutRoomJob {
     }
 }
 
-const roomsToClaim = ["W55N12"];
+const roomsToClaim = [];
 
-const roomsToMine = ["W56N11", "W55N11"];
+// export const roomsToMine: string[] = ["W56N11", "W55N11"];
+const roomsToMine = [];
 
 const roomOperations = {
     generateRoomsArray(roomOperation) {
@@ -5563,12 +6543,12 @@ let RoomOperator = class RoomOperator {
         if (room) {
             if (room.controller) {
                 if (room.controller.upgradeBlocked) {
-                    if (room.controller.upgradeBlocked > 600) {
+                    if (room.controller.upgradeBlocked > 150) {
                         postponeCreate = true;
                     }
                     if (room.controller.reservation) {
                         if (room.controller.reservation.username === myScreepsUsername) {
-                            if (room.controller.reservation.ticksToEnd > 1500) {
+                            if (room.controller.reservation.ticksToEnd > 1000) {
                                 postponeCreate = true;
                             }
                         }
@@ -5628,7 +6608,7 @@ class MineSourceJob {
             Memory.queues.jobQueue[UUID] = {
                 jobParameters: {
                     uuid: UUID,
-                    status: "fetchingResource",
+                    status: "working",
                     spawnRoom: this.JobParameters.spawnRoom,
                     room: this.JobParameters.room,
                     jobType: "mineSource",
@@ -5819,7 +6799,8 @@ let SpawnOperator = class SpawnOperator {
     }
     operateSpawns(roomName) {
         if (Memory.rooms[roomName].queues.spawnQueue) {
-            const sortedRoomSpawnQueue = Object.entries(Memory.rooms[roomName].queues.spawnQueue);
+            const sortedRoomSpawnQueue = Object.entries(Memory.rooms[roomName].queues.spawnQueue).sort(([, spawnQueueEntryA], [, spawnQueueEntryB]) => creepPriority(Game.rooms[roomName])[spawnQueueEntryA.creepType] -
+                creepPriority(Game.rooms[roomName])[spawnQueueEntryB.creepType]);
             let spawn = null;
             if (sortedRoomSpawnQueue.length > 0) {
                 const nextSpawnJob = sortedRoomSpawnQueue[0][1];
@@ -5868,7 +6849,7 @@ let SpawnOperator = class SpawnOperator {
                 room: spawn.pos.roomName,
                 jobType: "feedSpawn"
             };
-            const count = creepNumbers[JobParameters.jobType];
+            const count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[JobParameters.room][JobParameters.jobType];
             new FeedSpawnJob(JobParameters, count);
         });
     }
@@ -5994,16 +6975,13 @@ TerminalOperator = __decorate([
 class FeedTowerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
-            .forEach(([jobUUID, jobMemory]) => {
-            if (jobMemory.index > count) {
-                this.deleteJob(jobUUID);
-            }
-        });
-        if (count === 1) {
+        if (count === 0) {
             const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.towerId}-1`);
-            this.createJob(UUID, 1);
+            this.deleteJob(UUID);
+        }
+        else if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.towerId}-1`);
+            this.createJob(UUID, count);
         }
         else {
             let iterations = 1;
@@ -6034,7 +7012,9 @@ class FeedTowerJob {
     }
     deleteJob(UUID) {
         if (Memory.queues.jobQueue[UUID]) {
-            Log.Informational(`Deleting "FeedTowerJob" for Tower ID "${this.JobParameters.towerId} with the UUID of ${UUID}"`);
+            const jobParameters = Memory.queues.jobQueue[UUID]
+                .jobParameters;
+            Log.Informational(`Deleting "FeedTowerJob" for Tower ID "${jobParameters.towerId} with the UUID of ${UUID}"`);
             delete Memory.queues.jobQueue[UUID];
         }
     }
@@ -6051,7 +7031,12 @@ let TowerOperator = class TowerOperator {
                         const tower = Game.getObjectById(towerId);
                         if (tower) {
                             if (tower.my) {
-                                this.createTowerFeederJob(tower);
+                                if (tower.store[RESOURCE_ENERGY] < TOWER_CAPACITY * 0.3) {
+                                    this.createTowerFeederJob(tower);
+                                }
+                                else {
+                                    this.deleteTowerFeederJob(tower);
+                                }
                                 this.operateTowers(tower);
                             }
                         }
@@ -6068,6 +7053,15 @@ let TowerOperator = class TowerOperator {
             towerId: tower.id
         };
         new FeedTowerJob(jobParameters);
+    }
+    deleteTowerFeederJob(tower) {
+        const jobParameters = {
+            status: "fetchingResource",
+            room: tower.room.name,
+            jobType: "feedTower",
+            towerId: tower.id
+        };
+        new FeedTowerJob(jobParameters, 0);
     }
     operateTowers(tower) {
         if (!this.attackHostiles(tower)) {
@@ -6285,7 +7279,7 @@ let DroppedResourceMonitor = class DroppedResourceMonitor {
                     status: "fetchingResource",
                     jobType: "lootResource"
                 };
-                const count = creepNumbers[jobParameters.jobType];
+                const count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
                 new LootResourceJob(jobParameters, count);
             }
         }

@@ -11,16 +11,21 @@ export class LootResourceCreep extends BaseCreep {
     this.checkIfFull(creep, RESOURCE_ENERGY);
     if (creep.memory.status === "fetchingResource") {
       const resourceArray: Resource<ResourceConstant>[] = [];
-      Object.entries(creep.room.memory.monitoring.droppedResources).forEach(([resourceIdString]) => {
-        const resourceId = resourceIdString as Id<Resource<ResourceConstant>>;
-        const resource = Game.getObjectById(resourceId);
-        if (resource) {
-          resourceArray.push(resource);
-        }
-      });
-      const nearestResource = creep.pos.findClosestByPath(resourceArray);
-      if (nearestResource) {
-        this.pickupResource(creep, nearestResource);
+      Object.entries(creep.room.memory.monitoring.droppedResources)
+        .sort(
+          ([, droppedResourceEntryA], [, droppedResourceEntryB]) =>
+            droppedResourceEntryB.amount - droppedResourceEntryA.amount
+        )
+        .forEach(([resourceIdString]) => {
+          const resourceId = resourceIdString as Id<Resource<ResourceConstant>>;
+          const resource = Game.getObjectById(resourceId);
+          if (resource) {
+            resourceArray.push(resource);
+          }
+        });
+      const nextResource = resourceArray[0];
+      if (nextResource) {
+        this.pickupResource(creep, nextResource);
       }
     } else if (creep.memory.status === "working") {
       if (creep.room.memory.monitoring.structures.storage) {

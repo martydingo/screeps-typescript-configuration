@@ -134,12 +134,12 @@ export class RoomOperator {
     if (room) {
       if (room.controller) {
         if (room.controller.upgradeBlocked) {
-          if (room.controller.upgradeBlocked > 600) {
+          if (room.controller.upgradeBlocked > 150) {
             postponeCreate = true;
           }
           if (room.controller.reservation) {
             if (room.controller.reservation.username === myScreepsUsername) {
-              if (room.controller.reservation.ticksToEnd > 1500) {
+              if (room.controller.reservation.ticksToEnd > 1000) {
                 postponeCreate = true;
               }
             }

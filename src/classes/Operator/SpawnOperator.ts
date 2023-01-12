@@ -3,6 +3,7 @@ import { FeedSpawnJob } from "classes/Job/FeedSpawnJob";
 import { Log } from "classes/Log";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 import { creepPriority } from "configuration/creeps/creepPriority";
+import { creepNumbersOverride } from "configuration/rooms/creepNumbersOverride";
 
 @profile
 export class SpawnOperator {
@@ -15,7 +16,11 @@ export class SpawnOperator {
 
   private operateSpawns(roomName: string) {
     if (Memory.rooms[roomName].queues.spawnQueue) {
-      const sortedRoomSpawnQueue = Object.entries(Memory.rooms[roomName].queues.spawnQueue);
+      const sortedRoomSpawnQueue = Object.entries(Memory.rooms[roomName].queues.spawnQueue).sort(
+        ([, spawnQueueEntryA], [, spawnQueueEntryB]) =>
+          creepPriority(Game.rooms[roomName])[spawnQueueEntryA.creepType] -
+          creepPriority(Game.rooms[roomName])[spawnQueueEntryB.creepType]
+      );
       let spawn: StructureSpawn | null = null;
       if (sortedRoomSpawnQueue.length > 0) {
         const nextSpawnJob = sortedRoomSpawnQueue[0][1];
@@ -68,7 +73,8 @@ export class SpawnOperator {
         room: spawn.pos.roomName,
         jobType: "feedSpawn"
       };
-      const count: number = creepNumbers[JobParameters.jobType];
+      const count: number =
+        creepNumbers[JobParameters.jobType] + creepNumbersOverride[JobParameters.room][JobParameters.jobType];
       new FeedSpawnJob(JobParameters, count);
     });
   }

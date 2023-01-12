@@ -12,7 +12,10 @@ export class ReserveRoomJob {
           this.deleteJob(jobUUID);
         }
       });
-    if (count === 1) {
+    if (count === 0) {
+      const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
+      this.deleteJob(UUID);
+    } else if (count === 1) {
       const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-1`);
       this.createJob(UUID, 1);
     } else {

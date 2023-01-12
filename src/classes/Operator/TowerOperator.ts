@@ -14,7 +14,11 @@ export class TowerOperator {
             const tower = Game.getObjectById(towerId);
             if (tower) {
               if (tower.my) {
-                this.createTowerFeederJob(tower);
+                if (tower.store[RESOURCE_ENERGY] < TOWER_CAPACITY * 0.3) {
+                  this.createTowerFeederJob(tower);
+                } else {
+                  this.deleteTowerFeederJob(tower);
+                }
                 this.operateTowers(tower);
               }
             }
@@ -31,6 +35,16 @@ export class TowerOperator {
       towerId: tower.id
     };
     new FeedTowerJob(jobParameters);
+  }
+
+  private deleteTowerFeederJob(tower: StructureTower) {
+    const jobParameters: FeedTowerJobParameters = {
+      status: "fetchingResource",
+      room: tower.room.name,
+      jobType: "feedTower",
+      towerId: tower.id
+    };
+    new FeedTowerJob(jobParameters, 0);
   }
   private operateTowers(tower: StructureTower): void {
     if (!this.attackHostiles(tower)) {

@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+import { fetchBodyPartCost } from "common/fetchbodyPartCost";
+import { fetchBodyParts } from "common/fetchBodyParts";
 import { findPath } from "common/findPath";
 import { movePathColors } from "configuration/visual/movePathColors";
 import { profile } from "Profiler";
@@ -7,19 +9,23 @@ import { Log } from "./Log";
 @profile
 export class BaseCreep {
   public constructor(creep: Creep) {
-    if (creep.memory.status === "recyclingCreep") {
-      const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
-      if (closestSpawn) {
-        const recycleResult = closestSpawn.recycleCreep(creep);
-        if (recycleResult === ERR_NOT_IN_RANGE) {
-          this.moveCreep(creep, closestSpawn.pos);
-        } else {
-          if (recycleResult === OK) {
-            Log.Debug(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`);
+    if (!creep.spawning) {
+      if (creep.memory.status === "recyclingCreep") {
+        const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
+        if (closestSpawn) {
+          const recycleResult = closestSpawn.recycleCreep(creep);
+          if (recycleResult === ERR_NOT_IN_RANGE) {
+            this.moveCreep(creep, closestSpawn.pos);
           } else {
-            Log.Warning(
-              `${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`
-            );
+            if (recycleResult === OK) {
+              Log.Debug(
+                `${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`
+              );
+            } else {
+              Log.Warning(
+                `${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`
+              );
+            }
           }
         }
       }
@@ -93,6 +99,19 @@ export class BaseCreep {
     } else {
       if (creep.memory.status === "fetchingBoosts") {
         creep.memory.status = "working";
+      }
+    }
+  }
+  public checkBodyParts(creep: Creep) {
+    const jobType = creep.memory.jobType;
+    const creepBodyParts: BodyPartConstant[] = [];
+    creep.body.forEach(bodyPartArray => {
+      creepBodyParts.push(bodyPartArray.type);
+    });
+    const desiredCreepBodyParts = fetchBodyParts(jobType, creep.memory.room);
+    if (creepBodyParts !== desiredCreepBodyParts) {
+      if (fetchBodyPartCost(desiredCreepBodyParts) > fetchBodyPartCost(creepBodyParts)) {
+        creep.memory.status = "recyclingCreep";
       }
     }
   }
@@ -357,5 +376,24 @@ export class BaseCreep {
         );
       }
     }
+  }
+  public lookAroundCreep(creep: Creep) {
+    const creepPos = creep.pos;
+    const lookAreaBoundaryCoordinateArray = [
+      [creep.pos.x - 1, creep.pos.y + 1],
+      [creep.pos.x, creep.pos.y + 1],
+      [creep.pos.x + 1, creep.pos.y + 1],
+      [creep.pos.x - 1, creep.pos.y],
+      [creep.pos.x, creep.pos.y],
+      [creep.pos.x + 1, creep.pos.y],
+      [creep.pos.x - 1, creep.pos.y - 1],
+      [creep.pos.x, creep.pos.y - 1],
+      [creep.pos.x + 1, creep.pos.y - 1]
+    ];
+    const lookResults: LookAtResult<LookConstant>[][] = [];
+    lookAreaBoundaryCoordinateArray.forEach(([lookAreaBoundaryCoordinateX, lookAreaBoundaryCoordinateY]) => {
+      lookResults.push(creep.room.lookAt(lookAreaBoundaryCoordinateX, lookAreaBoundaryCoordinateY));
+    });
+    return lookResults;
   }
 }

@@ -2,6 +2,7 @@ import { profile } from "Profiler";
 import { LootResourceJob } from "classes/Job/LootResourceJob";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 import { findPath } from "common/findPath";
+import { creepNumbersOverride } from "configuration/rooms/creepNumbersOverride";
 
 @profile
 export class DroppedResourceMonitor {
@@ -49,7 +50,8 @@ export class DroppedResourceMonitor {
           status: "fetchingResource",
           jobType: "lootResource"
         };
-        const count: number = creepNumbers[jobParameters.jobType];
+        const count: number =
+          creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
         new LootResourceJob(jobParameters, count);
       }
     }

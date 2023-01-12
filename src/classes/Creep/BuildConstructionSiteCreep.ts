@@ -17,7 +17,9 @@ export class BuildConstructionSiteCreep extends BaseCreep {
       const constructionSites = Object.entries(Memory.rooms[creep.memory.room].monitoring.constructionSites).sort(
         ([, constructionSiteMemoryA], [, constructionSiteMemoryB]) =>
           // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/restrict-plus-operands, @typescript-eslint/no-unsafe-return
-          constructionSiteMemoryA.progress + constructionSiteMemoryB.progress
+          constructionSiteMemoryB.progress / constructionSiteMemoryB.total -
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/restrict-plus-operands, @typescript-eslint/no-unsafe-return
+          constructionSiteMemoryA.progress / constructionSiteMemoryA.total
       );
       if (constructionSites[0]) {
         const constructionSiteId = constructionSites[0][0] as Id<ConstructionSite>;

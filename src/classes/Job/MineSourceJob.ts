@@ -36,7 +36,7 @@ export class MineSourceJob {
       Memory.queues.jobQueue[UUID] = {
         jobParameters: {
           uuid: UUID,
-          status: "fetchingResource",
+          status: "working",
           spawnRoom: this.JobParameters.spawnRoom,
           room: this.JobParameters.room,
           jobType: "mineSource",

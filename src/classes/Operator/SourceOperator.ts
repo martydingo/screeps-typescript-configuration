@@ -5,6 +5,7 @@ import { Log } from "classes/Log";
 import { findPath } from "common/findPath";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 import { myScreepsUsername } from "configuration/user";
+import { creepNumbersOverride } from "configuration/rooms/creepNumbersOverride";
 
 @profile
 export class SourceOperator {

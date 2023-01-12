@@ -2,6 +2,7 @@ import { profile } from "Profiler";
 import { BuildConstructionSiteJob } from "classes/Job/BuildConstructionSiteJob";
 import { findPath } from "common/findPath";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
+import { creepNumbersOverride } from "configuration/rooms/creepNumbersOverride";
 
 @profile
 export class ConstructionSiteOperator {
@@ -32,7 +33,7 @@ export class ConstructionSiteOperator {
       spawnRoom,
       jobType: "buildConstructionSite"
     };
-    const count: number = creepNumbers[JobParameters.jobType];
+    const count: number = creepNumbers[JobParameters.jobType] + creepNumbersOverride[roomName][JobParameters.jobType];
     new BuildConstructionSiteJob(JobParameters, count);
   }
   private deleteConstructionSiteJob(roomName: string) {
