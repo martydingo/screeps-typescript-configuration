@@ -2,6 +2,7 @@ import { profile } from "Profiler";
 import { FactoryEngineerJob } from "classes/Job/FactoryEngineerJob";
 import { base64 } from "common/utilities/base64";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
+import { creepNumbersOverride } from "configuration/rooms/creepNumbersOverride";
 
 @profile
 export class FactoryOperator {
@@ -59,8 +60,12 @@ export class FactoryOperator {
         jobType: "factoryEngineer",
         factoryId: factory.id
       };
-      let count = creepNumbers[jobParameters.jobType];
-
+      let count: number = creepNumbers[jobParameters.jobType];
+      if (creepNumbersOverride[jobParameters.room]) {
+        if (creepNumbersOverride[jobParameters.room][jobParameters.jobType]) {
+          count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
+        }
+      }
       const factoryJobs = Object.entries(factory.room.memory.queues.factoryQueue);
       if (factoryJobs.length === 0) {
         count = 0;

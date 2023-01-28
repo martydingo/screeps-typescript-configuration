@@ -6,6 +6,7 @@ import { FactoryEngineerCreep } from "classes/Creep/FactoryEngineerCreep";
 import { FeedLinkCreep } from "classes/Creep/FeedLinkCreep";
 import { FeedSpawnCreep } from "classes/Creep/FeedSpawnCreep";
 import { FeedTowerCreep } from "classes/Creep/FeedTowerCreep";
+import { harvestDepositCreep } from "classes/Creep/HarvestDepositCreep";
 import { LabEngineerCreep } from "classes/Creep/LabEngineerCreep";
 import { LootResourceCreep } from "classes/Creep/LootResourceCreep";
 import { ReserveRoomCreep } from "classes/Creep/ReserveRoomCreep";
@@ -88,6 +89,11 @@ export class CreepOperator {
         case "dismantleEnemyBuildings":
           new DismantleEnemyBuildingsCreep(creepToOperate);
           break;
+
+        case "harvestDeposit":
+          new harvestDepositCreep(creepToOperate);
+          break;
+
         default:
           Log.Alert(
             // eslint-disable-next-line @typescript-eslint/restrict-template-expressions

@@ -73,8 +73,13 @@ export class SpawnOperator {
         room: spawn.pos.roomName,
         jobType: "feedSpawn"
       };
-      const count: number =
-        creepNumbers[JobParameters.jobType] + creepNumbersOverride[JobParameters.room][JobParameters.jobType];
+      let count: number = creepNumbers[JobParameters.jobType];
+      if (creepNumbersOverride[JobParameters.room]) {
+        if (creepNumbersOverride[JobParameters.room][JobParameters.jobType]) {
+          count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[JobParameters.room][JobParameters.jobType];
+        }
+      }
+
       new FeedSpawnJob(JobParameters, count);
     });
   }

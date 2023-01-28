@@ -10,10 +10,7 @@ export class ReserveRoomCreep extends BaseCreep {
     this.runCreep(creep);
   }
   private runCreep(creep: Creep) {
-    this.checkIfRecyclable(creep);
-    if (creep.memory.status !== "recyclingCreep") {
-      this.moveHome(creep);
-    }
+    this.moveHome(creep);
     if (creep.memory.status === "working") {
       if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
         const controllerToReserveMemory = Memory.rooms[creep.memory.room].monitoring.structures.controller;

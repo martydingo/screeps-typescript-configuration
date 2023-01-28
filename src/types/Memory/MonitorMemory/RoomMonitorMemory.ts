@@ -9,5 +9,6 @@ declare global {
     sources: SourceMonitorMemory;
     minerals: MineralMonitorMemory;
     structures: StructureMonitorMemory;
+    deposit?: DepositMonitorMemory;
   }
 }

@@ -1,6 +1,9 @@
 import { roomsToClaim } from "configuration/rooms/roomsToClaim";
+import { roomsToHarvestDeposits } from "configuration/rooms/roomsToHarvestDeposits";
 import { roomsToMine } from "configuration/rooms/roomsToMine";
+import { roomsToMonitor } from "configuration/rooms/roomsToMonitor";
 import { ConstructionSiteMonitor } from "./RoomMonitor/ConstructionSiteMonitor";
+import { DepositMonitor } from "./RoomMonitor/DepositMonitor";
 import { DroppedResourceMonitor } from "./RoomMonitor/DroppedResourceMonitor";
 import { EnergyMonitor } from "./RoomMonitor/EnergyMonitor";
 import { HostileMonitor } from "./RoomMonitor/HostileMonitor";
@@ -28,7 +31,12 @@ export class RoomMonitor {
         if (this.room.controller.my) {
           this.runChildMonitors();
         }
-        if (roomsToClaim.includes(this.roomName) || roomsToMine.includes(this.roomName)) {
+        if (
+          roomsToClaim.includes(this.roomName) ||
+          roomsToMine.includes(this.roomName) ||
+          roomsToMonitor.includes(this.roomName) ||
+          roomsToHarvestDeposits.includes(this.roomName)
+        ) {
           this.runChildMonitors();
         }
       }
@@ -42,6 +50,7 @@ export class RoomMonitor {
     this.runDroppedResourceMonitors();
     this.runConstructionSiteMonitors();
     this.runMineralMonitors();
+    this.runDepositMonitors();
   }
   private runStructureMonitor(): void {
     if (this.room.controller) {
@@ -69,5 +78,10 @@ export class RoomMonitor {
   }
   private runConstructionSiteMonitors(): void {
     new ConstructionSiteMonitor(this.room);
+  }
+  private runDepositMonitors(): void {
+    this.room.find(FIND_DEPOSITS).forEach(deposit => {
+      new DepositMonitor(deposit);
+    });
   }
 }

@@ -27,7 +27,11 @@ export function creepPriority(room: Room): { [creepType: string]: number } {
         }
       }
     }
-    if (Object.entries(room.memory.monitoring.droppedResources).length > 0) {
+    if (
+      Object.entries(room.memory.monitoring.droppedResources).filter(
+        ([, DroppedResource]) => DroppedResource.resourceType === RESOURCE_ENERGY
+      ).length > 0
+    ) {
       roomContainsDroppedEnergy = true;
     }
     if (Object.entries(Memory.creeps).filter(([, creepMemory]) => creepMemory.jobType === "feedSpawn").length > 0) {

@@ -36,6 +36,7 @@ export class BuildConstructionSiteCreep extends BaseCreep {
       this.fetchSource(creep);
     }
   }
+
   private buildConstructionSite(creep: Creep, constructionSite: ConstructionSite): ScreepsReturnCode {
     const upgradeResult: ScreepsReturnCode = creep.build(constructionSite);
     if (upgradeResult === ERR_NOT_IN_RANGE) {

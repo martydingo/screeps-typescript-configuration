@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+import { fetchBodyPartCost } from "common/fetchbodyPartCost";
+import { fetchBodyParts } from "common/fetchBodyParts";
 import { findPath } from "common/findPath";
 import { movePathColors } from "configuration/visual/movePathColors";
 import { profile } from "Profiler";
@@ -7,19 +9,23 @@ import { Log } from "./Log";
 @profile
 export class BaseCreep {
   public constructor(creep: Creep) {
-    if (creep.memory.status === "recyclingCreep") {
-      const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
-      if (closestSpawn) {
-        const recycleResult = closestSpawn.recycleCreep(creep);
-        if (recycleResult === ERR_NOT_IN_RANGE) {
-          this.moveCreep(creep, closestSpawn.pos);
-        } else {
-          if (recycleResult === OK) {
-            Log.Debug(`${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`);
+    if (!creep.spawning) {
+      if (creep.memory.status === "recyclingCreep") {
+        const closestSpawn = findPath.findClosestSpawnToRoom(creep.pos.roomName);
+        if (closestSpawn) {
+          const recycleResult = closestSpawn.recycleCreep(creep);
+          if (recycleResult === ERR_NOT_IN_RANGE) {
+            this.moveCreep(creep, closestSpawn.pos);
           } else {
-            Log.Warning(
-              `${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`
-            );
+            if (recycleResult === OK) {
+              Log.Debug(
+                `${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has been recycled`
+              );
+            } else {
+              Log.Warning(
+                `${creep.name} of creepType ${creep.memory.jobType} in ${creep.pos.roomName} has encountered a ${recycleResult} error while attempting to be recycled`
+              );
+            }
           }
         }
       }
@@ -96,6 +102,19 @@ export class BaseCreep {
       }
     }
   }
+  public checkBodyParts(creep: Creep) {
+    const jobType = creep.memory.jobType;
+    const creepBodyParts: BodyPartConstant[] = [];
+    creep.body.forEach(bodyPartArray => {
+      creepBodyParts.push(bodyPartArray.type);
+    });
+    const desiredCreepBodyParts = fetchBodyParts(jobType, creep.memory.room);
+    if (creepBodyParts !== desiredCreepBodyParts) {
+      if (fetchBodyPartCost(desiredCreepBodyParts) > fetchBodyPartCost(creepBodyParts)) {
+        creep.memory.status = "recyclingCreep";
+      }
+    }
+  }
   public moveHome(creep: Creep): void {
     if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
       if (creep.pos.roomName !== creep.memory.room) {
@@ -104,15 +123,11 @@ export class BaseCreep {
     }
     if (creep.memory.status === "movingIntoRoom") {
       if (creep.pos.roomName === creep.memory.room) {
-        delete creep.memory.safeRoute;
         creep.memory.status = "working";
       } else {
         // this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
-        if (!creep.memory.safeRoute) {
-          creep.memory.safeRoute = this.fetchSafePath(creep, creep.memory.room);
-        }
-
-        this.moveCreep(creep, creep.memory.safeRoute[0]);
+        const destination = findPath.findClearTerrain(creep.memory.room);
+        this.moveCreep(creep, destination);
       }
     }
   }
@@ -130,45 +145,51 @@ export class BaseCreep {
     return safeRoute;
   }
   public moveCreep(creep: Creep, destination: RoomPosition): ScreepsReturnCode {
-    let nextDestination = destination;
-    if (creep.pos.roomName !== destination.roomName) {
-      if (!creep.memory.safeRoute) {
-        creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
-      }
-    } else {
-      delete creep.memory.safeRoute;
-    }
-    if (creep.memory.safeRoute) {
-      if (Object.entries(creep.memory.safeRoute).length > 1) {
-        if (creep.memory.safeRoute[0].roomName === creep.pos.roomName) {
-          const newCreepSafeRouteMemory = Object.entries(creep.memory.safeRoute).splice(0, 1);
-          const creepSafeRouteArray: RoomPosition[] = [];
-          newCreepSafeRouteMemory.forEach(([, safeRouteRoomPosition]) => {
-            creepSafeRouteArray.push(safeRouteRoomPosition);
-          });
-          creep.memory.safeRoute = creepSafeRouteArray;
-        }
-      } else {
-        if (Object.entries(creep.memory.safeRoute).length === 1) {
-          nextDestination = new RoomPosition(
-            creep.memory.safeRoute[0].x,
-            creep.memory.safeRoute[0].y,
-            creep.memory.safeRoute[0].roomName
-          );
-        }
-      }
-    }
+    if (creep.fatigue === 0) {
+      let nextDestination = new RoomPosition(destination.x, destination.y, destination.roomName);
 
-    const moveResult = creep.moveTo(nextDestination, {
-      visualizePathStyle: {
-        fill: "transparent",
-        stroke: movePathColors[creep.memory.jobType],
-        lineStyle: "dotted",
-        strokeWidth: 0.1,
-        opacity: 0.66
+      if (creep.pos.roomName !== destination.roomName) {
+        if (!creep.memory.safeRoute) {
+          creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
+        } else {
+          const safeRouteArray = creep.memory.safeRoute;
+          const lastSafeRoom = safeRouteArray.pop();
+          if (lastSafeRoom?.roomName !== destination.roomName) {
+            delete creep.memory.safeRoute;
+            creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
+          }
+        }
       }
-    });
-    return moveResult;
+      if (creep.memory.safeRoute) {
+        let safeRouteArray = creep.memory.safeRoute;
+        if (safeRouteArray.length > 1) {
+          if (safeRouteArray[0].roomName === creep.pos.roomName) {
+            delete creep.memory.safeRoute;
+            creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
+            safeRouteArray = creep.memory.safeRoute;
+          }
+          nextDestination = safeRouteArray[0];
+        } else if (safeRouteArray.length === 1) {
+          delete creep.memory.safeRoute;
+          nextDestination = destination;
+        }
+      }
+
+      // console.log(`${creep.memory.room} - ${creep.memory.jobType} - ${creep.pos} - ${destination}`);
+      const moveResult = creep.moveTo(nextDestination, {
+        visualizePathStyle: {
+          fill: "transparent",
+          stroke: movePathColors[creep.memory.jobType],
+          lineStyle: "dotted",
+          strokeWidth: 0.1,
+          opacity: 0.66
+        },
+        reusePath: 10
+      });
+
+      return moveResult;
+    }
+    return -11;
   }
   public harvestSource(creep: Creep, source: Source): ScreepsReturnCode {
     const harvestResult = creep.harvest(source);
@@ -186,7 +207,7 @@ export class BaseCreep {
       return moveResult;
     } else return pickupResult;
   }
-  public withdrawResource(creep: Creep, origin: Structure, resource: ResourceConstant): ScreepsReturnCode {
+  public withdrawResource(creep: Creep, origin: Structure | Ruin, resource: ResourceConstant): ScreepsReturnCode {
     const withdrawResult = creep.withdraw(origin, resource);
     if (withdrawResult === ERR_NOT_IN_RANGE) {
       const moveResult = this.moveCreep(creep, origin.pos);
@@ -277,7 +298,7 @@ export class BaseCreep {
       } else {
         const droppedResourceArray: Resource<ResourceConstant>[] = [];
         Object.entries(creep.room.memory.monitoring.droppedResources)
-          .filter(DroppedResource => DroppedResource[1].resourceType === RESOURCE_ENERGY)
+          .filter(([, DroppedResource]) => DroppedResource.resourceType === RESOURCE_ENERGY)
           .forEach(([droppedResourceId]) => {
             const droppedResource = Game.getObjectById(droppedResourceId as Id<Resource<ResourceConstant>>);
             if (droppedResource) {
@@ -350,5 +371,24 @@ export class BaseCreep {
         );
       }
     }
+  }
+  public lookAroundCreep(creep: Creep) {
+    const creepPos = creep.pos;
+    const lookAreaBoundaryCoordinateArray = [
+      [Math.min(Math.max(1, creep.pos.x - 1), 50), Math.min(Math.max(1, creep.pos.y + 1), 50)],
+      [Math.min(Math.max(1, creep.pos.x), 50), Math.min(Math.max(creep.pos.y + 1, 1), 50)],
+      [Math.min(Math.max(1, creep.pos.x + 1), 50), Math.min(Math.max(creep.pos.y + 1, 1), 50)],
+      [Math.min(Math.max(1, creep.pos.x - 1), 50), Math.min(Math.max(creep.pos.y, 1), 50)],
+      [Math.min(Math.max(1, creep.pos.x), 50), Math.min(Math.max(creep.pos.y, 1), 50)],
+      [Math.min(Math.max(1, creep.pos.x + 1), 50), Math.min(Math.max(creep.pos.y, 1), 50)],
+      [Math.min(Math.max(1, creep.pos.x - 1), 50), Math.min(Math.max(creep.pos.y - 1, 1), 50)],
+      [Math.min(Math.max(1, creep.pos.x), 50), Math.min(Math.max(creep.pos.y - 1, 1), 50)],
+      [Math.min(Math.max(1, creep.pos.x + 1), 50), Math.min(Math.max(creep.pos.y - 1, 1), 50)]
+    ];
+    const lookResults: LookAtResult<LookConstant>[][] = [];
+    lookAreaBoundaryCoordinateArray.forEach(([lookAreaBoundaryCoordinateX, lookAreaBoundaryCoordinateY]) => {
+      lookResults.push(creep.room.lookAt(lookAreaBoundaryCoordinateX, lookAreaBoundaryCoordinateY));
+    });
+    return lookResults;
   }
 }

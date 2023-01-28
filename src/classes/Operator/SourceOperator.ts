@@ -47,17 +47,31 @@ export class SourceOperator {
     new MineSourceJob(JobParameters, count);
   }
   private createTransportEnergyJob(source: Source) {
-    const storage = findPath.findClosestStorageToRoom(source.pos.roomName);
+    const spawnRoom = findPath.findClosestSpawnToRoom(source.pos.roomName).room;
+    let storage: StructureStorage | undefined;
+    if (spawnRoom) {
+      if (spawnRoom.storage) storage = spawnRoom.storage;
+    } else {
+      const findStorageResult = findPath.findClosestStorageToRoom(source.pos.roomName);
+      if (findStorageResult) {
+        storage = findStorageResult;
+      }
+    }
     if (storage) {
       const JobParameters: TransportResourceJobParameters = {
         status: "fetchingResource",
-        spawnRoom: findPath.findClosestSpawnToRoom(source.pos.roomName).pos.roomName,
+        spawnRoom: spawnRoom.name,
         room: source.pos.roomName,
         jobType: "transportResource",
         resourceType: RESOURCE_ENERGY,
         storage: storage.id
       };
-      const count: number = creepNumbers[JobParameters.jobType];
+      let count: number = creepNumbers[JobParameters.jobType];
+      if (creepNumbersOverride[JobParameters.room]) {
+        if (creepNumbersOverride[JobParameters.room][JobParameters.jobType]) {
+          count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[JobParameters.room][JobParameters.jobType];
+        }
+      }
       new TransportResourceJob(JobParameters, count);
     } else {
       Log.Alert(`TransportResource Job for source ${source.id} cannot find any storage nearby ${source.pos.roomName}!`);

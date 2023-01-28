@@ -7,6 +7,7 @@ declare global {
     status: string;
     jobType: "transportResource";
     resourceType: ResourceConstant;
+    resourceOrigin?: Id<Ruin>;
     storage: Id<StructureStorage> | Id<StructureContainer>;
   }
 }

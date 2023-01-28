@@ -22,6 +22,7 @@ export class RoomMemoryController {
           towers: {},
           links: {},
           containers: {},
+          ruins: {},
           labs: {},
           walls: {},
           other: {}

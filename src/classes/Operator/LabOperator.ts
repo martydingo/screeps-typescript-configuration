@@ -3,6 +3,7 @@ import { LabEngineerJob } from "classes/Job/LabEngineerJob";
 import { base64 } from "common/utilities/base64";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 import { labConfiguration } from "configuration/rooms/labs/labConfiguration";
+import { creepNumbersOverride } from "configuration/rooms/creepNumbersOverride";
 
 @profile
 export class LabOperator {
@@ -94,8 +95,12 @@ export class LabOperator {
         status: "awaitingJob",
         jobType: "labEngineer"
       };
-      let count = creepNumbers[jobParameters.jobType];
-
+      let count: number = creepNumbers[jobParameters.jobType];
+      if (creepNumbersOverride[jobParameters.room]) {
+        if (creepNumbersOverride[jobParameters.room][jobParameters.jobType]) {
+          count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
+        }
+      }
       const labJobs = Object.entries(Memory.rooms[roomName].queues.labQueue);
       if (labJobs.length === 0) {
         count = 0;

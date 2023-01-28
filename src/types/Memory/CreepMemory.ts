@@ -20,17 +20,23 @@ declare global {
       | "labEngineer"
       | "factoryEngineer"
       | "defendRoom"
-      | "dismantleEnemyBuildings";
+      | "dismantleEnemyBuildings"
+      | "harvestDeposit";
     sourceId?: Id<Source>;
     towerId?: Id<StructureTower>;
     controllerId?: Id<StructureController>;
     linkId?: Id<StructureLink>;
     room: string;
     resourceType?: ResourceConstant;
+    resourceOrigin?: Id<Ruin>;
     storage?: Id<StructureStorage> | Id<StructureContainer>;
     terminalJobUUID?: string;
     labJobUUID?: string;
     factoryJobUUID?: string;
     safeRoute?: RoomPosition[];
+    depositId?: Id<Deposit>;
+    cache?: {
+      dropEnergy?: boolean;
+    };
   }
 }

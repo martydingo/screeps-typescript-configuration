@@ -1,15 +1,15 @@
 import { Log } from "classes/Log";
 import { base64 } from "common/utilities/base64";
 
-export class TerminalEngineerJob {
-  public JobParameters: TerminalEngineerJobParameters;
-  public constructor(JobParameters: TerminalEngineerJobParameters, count = 1) {
+export class HarvestDepositJob {
+  public JobParameters: HarvestDepositJobParameters;
+  public constructor(JobParameters: HarvestDepositJobParameters, count = 1) {
     this.JobParameters = JobParameters;
     Object.entries(Memory.queues.jobQueue)
       .filter(
         ([, jobMemory]) =>
           jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
-          jobMemory.jobParameters.room === this.JobParameters.room
+          jobMemory.jobParameters.depositId === this.JobParameters.depositId
       )
       .forEach(([jobUUID, jobMemory]) => {
         if (jobMemory.index > count) {
@@ -17,12 +17,12 @@ export class TerminalEngineerJob {
         }
       });
     if (count === 1) {
-      const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.terminalId}-1`);
+      const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.depositId}-1`);
       this.createJob(UUID, 1);
     } else {
       let iterations = 1;
       while (iterations <= count) {
-        const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.terminalId}-${iterations}`);
+        const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.depositId}-${iterations}`);
         this.createJob(UUID, iterations);
         iterations++;
       }
@@ -31,28 +31,29 @@ export class TerminalEngineerJob {
   private createJob(UUID: string, index: number) {
     if (!Memory.queues.jobQueue[UUID]) {
       Log.Informational(
-        `Creating "TerminalEngineerJob" for Terminal ID: "${this.JobParameters.terminalId}" with the UUID "${UUID}"`
+        `Creating "HarvestDepositJob" for Deposit ID: "${this.JobParameters.depositId}" with the UUID "${UUID}"`
       );
       Memory.queues.jobQueue[UUID] = {
         jobParameters: {
           uuid: UUID,
-          status: "awaitingJob",
-          room: this.JobParameters.room,
+          status: "working",
           spawnRoom: this.JobParameters.spawnRoom,
-          jobType: "terminalEngineer",
-          terminalId: this.JobParameters.terminalId
+          room: this.JobParameters.room,
+          jobType: "harvestDeposit",
+          depositId: this.JobParameters.depositId,
+          storage: this.JobParameters.storage
         },
         index,
         room: this.JobParameters.room,
-        jobType: "terminalEngineer",
+        jobType: "harvestDeposit",
         timeAdded: Game.time
       };
     }
   }
   private deleteJob(UUID: string) {
-    if (Memory.queues.jobQueue[UUID]) {
+    if (!Memory.queues.jobQueue[UUID]) {
       Log.Informational(
-        `Deleting "TerminalEngineerJob" for Terminal ID: "${this.JobParameters.terminalId}" with the UUID "${UUID}"`
+        `Deleting  "HarvestDepositJob" for Deposit ID: "${this.JobParameters.depositId}" with the UUID "${UUID}"`
       );
       delete Memory.queues.jobQueue[UUID];
     }

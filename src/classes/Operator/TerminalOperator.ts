@@ -2,6 +2,7 @@ import { profile } from "Profiler";
 import { TerminalEngineerJob } from "classes/Job/TerminalEngineerJob";
 import { base64 } from "common/utilities/base64";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
+import { creepNumbersOverride } from "configuration/rooms/creepNumbersOverride";
 
 @profile
 export class TerminalOperator {
@@ -56,8 +57,12 @@ export class TerminalOperator {
         jobType: "terminalEngineer",
         terminalId: terminal.id
       };
-      let count = creepNumbers[jobParameters.jobType];
-
+      let count: number = creepNumbers[jobParameters.jobType];
+      if (creepNumbersOverride[jobParameters.room]) {
+        if (creepNumbersOverride[jobParameters.room][jobParameters.jobType]) {
+          count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
+        }
+      }
       const terminalJobs = Object.entries(terminal.room.memory.queues.terminalQueue);
       if (terminalJobs.length === 0) {
         count = 0;

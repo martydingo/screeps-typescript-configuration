@@ -23,6 +23,15 @@ export class ConstructionSiteOperator {
     }
   }
   private createConstructionSiteJob(roomName: string) {
+    let roomEnergyLow = false;
+    const room = Game.rooms[roomName];
+    if (room) {
+      if (room.storage) {
+        if (room.storage.store[RESOURCE_ENERGY] < 100000) {
+          roomEnergyLow = true;
+        }
+      }
+    }
     let spawnRoom = roomName;
     if (Object.entries(Memory.rooms[roomName].monitoring.structures.spawns).length === 0) {
       spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
@@ -33,7 +42,15 @@ export class ConstructionSiteOperator {
       spawnRoom,
       jobType: "buildConstructionSite"
     };
-    const count: number = creepNumbers[JobParameters.jobType] + creepNumbersOverride[roomName][JobParameters.jobType];
+    let count: number = creepNumbers[JobParameters.jobType];
+    if (creepNumbersOverride[roomName]) {
+      if (creepNumbersOverride[roomName][JobParameters.jobType]) {
+        count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[roomName][JobParameters.jobType];
+      }
+    }
+    if (roomEnergyLow) {
+      count = 0;
+    }
     new BuildConstructionSiteJob(JobParameters, count);
   }
   private deleteConstructionSiteJob(roomName: string) {

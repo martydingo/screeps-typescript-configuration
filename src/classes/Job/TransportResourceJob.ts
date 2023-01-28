@@ -5,19 +5,46 @@ export class TransportResourceJob {
   public JobParameters: TransportResourceJobParameters;
   public constructor(JobParameters: TransportResourceJobParameters, count = 1) {
     this.JobParameters = JobParameters;
-    Object.entries(Memory.queues.jobQueue)
-      .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
-      .forEach(([jobUUID, jobMemory]) => {
-        if (jobMemory.index > count) {
+    if (count === 0) {
+      Object.entries(Memory.queues.jobQueue)
+        .filter(
+          ([, jobMemory]) =>
+            jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room
+        )
+        .forEach(([jobUUID]) => {
           this.deleteJob(jobUUID);
-        }
-      });
+        });
+    }
     if (count === 1) {
+      Object.entries(Memory.queues.jobQueue)
+        .filter(
+          ([, jobMemory]) =>
+            jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room
+        )
+        .forEach(([jobUUID, jobMemory]) => {
+          if (jobMemory.index > count) {
+            this.deleteJob(jobUUID);
+          }
+        });
       const UUID = base64.encode(
         `${this.JobParameters.jobType}-${this.JobParameters.room}-${this.JobParameters.resourceType}-${this.JobParameters.storage}-1`
       );
       this.createJob(UUID, 1);
     } else {
+      Object.entries(Memory.queues.jobQueue)
+        .filter(
+          ([, jobMemory]) =>
+            jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room
+        )
+        .forEach(([jobUUID, jobMemory]) => {
+          if (jobMemory.index > count) {
+            this.deleteJob(jobUUID);
+          }
+        });
+
       let iterations = 1;
       while (iterations <= count) {
         const UUID = base64.encode(
@@ -41,6 +68,7 @@ export class TransportResourceJob {
           spawnRoom: this.JobParameters.spawnRoom,
           jobType: "transportResource",
           resourceType: this.JobParameters.resourceType,
+          resourceOrigin: this.JobParameters.resourceOrigin || undefined,
           storage: this.JobParameters.storage
         },
         index,

@@ -17,12 +17,13 @@ export function creepPriority(room: Room): { [creepType: string]: number } {
     labEngineer: 15,
     factoryEngineer: 16,
     tankRoom: 17,
-    dismantleEnemyBuildings: 18
+    dismantleEnemyBuildings: 18,
+    harvestDeposit: 19
   };
   if (room) {
     let storageContainsEnergy = false;
     let roomContainsDroppedEnergy = false;
-    let feederCreepAlive = false;
+    let feederCreepDead = false;
     if (room.memory.monitoring.structures.storage) {
       if (room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY]) {
         if (room.memory.monitoring.structures.storage.resources[RESOURCE_ENERGY].resourceAmount >= 300) {
@@ -30,13 +31,17 @@ export function creepPriority(room: Room): { [creepType: string]: number } {
         }
       }
     }
-    if (Object.entries(room.memory.monitoring.droppedResources).length > 0) {
+    if (
+      Object.entries(room.memory.monitoring.droppedResources).filter(
+        ([, DroppedResource]) => DroppedResource.resourceType === RESOURCE_ENERGY
+      ).length > 0
+    ) {
       roomContainsDroppedEnergy = true;
     }
-    if (Object.entries(Memory.creeps).filter(([, creepMemory]) => creepMemory.jobType === "feedSpawn").length > 0) {
-      feederCreepAlive = true;
+    if (Object.entries(Memory.creeps).filter(([, creepMemory]) => creepMemory.jobType === "feedSpawn").length === 0) {
+      feederCreepDead = true;
     }
-    if (roomContainsDroppedEnergy || storageContainsEnergy || feederCreepAlive) {
+    if (roomContainsDroppedEnergy || storageContainsEnergy || feederCreepDead) {
       priority = {
         feedSpawn: priority.mineSource,
         mineSource: priority.feedSpawn,
@@ -55,7 +60,8 @@ export function creepPriority(room: Room): { [creepType: string]: number } {
         labEngineer: priority.labEngineer,
         factoryEngineer: priority.factoryEngineer,
         tankRoom: priority.tankRoom,
-        dismantleEnemyBuildings: priority.dismantleEnemyBuildings
+        dismantleEnemyBuildings: priority.dismantleEnemyBuildings,
+        harvestDeposit: priority.harvestDeposit
       };
     }
   }

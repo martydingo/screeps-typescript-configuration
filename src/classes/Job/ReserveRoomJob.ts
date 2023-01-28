@@ -6,7 +6,11 @@ export class ReserveRoomJob {
   public constructor(JobParameters: ReserveRoomJobParameters, count = 1) {
     this.JobParameters = JobParameters;
     Object.entries(Memory.queues.jobQueue)
-      .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+      .filter(
+        ([, jobMemory]) =>
+          jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+          jobMemory.jobParameters.room === this.JobParameters.room
+      )
       .forEach(([jobUUID, jobMemory]) => {
         if (jobMemory.index > count) {
           this.deleteJob(jobUUID);
@@ -47,7 +51,7 @@ export class ReserveRoomJob {
   }
   private deleteJob(UUID: string) {
     if (Memory.queues.jobQueue[UUID]) {
-      Log.Informational(`Deleting "ReserveRoomJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+      Log.Informational(`Deleting "ReserveRoomJob" for Room ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
       delete Memory.queues.jobQueue[UUID];
     }
   }

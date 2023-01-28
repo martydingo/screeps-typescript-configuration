@@ -1,4 +1,5 @@
 import { roomOperations } from "common/roomOperations";
+import { roomsToMonitor } from "configuration/rooms/roomsToMonitor";
 import { RoomMonitor } from "./Monitor/RoomMonitor";
 
 export class Monitor {
@@ -6,8 +7,9 @@ export class Monitor {
     this.monitorRooms();
   }
   private monitorRooms(): void {
-    const roomsToMonitor = roomOperations.generateRoomsArray();
-    roomsToMonitor.forEach(roomName => {
+    let roomMonitorArray: string[] = roomOperations.generateRoomsArray();
+    roomMonitorArray = roomMonitorArray.concat(roomsToMonitor);
+    roomMonitorArray.forEach(roomName => {
       new RoomMonitor(roomName);
     });
   }

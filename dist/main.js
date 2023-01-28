@@ -435,33 +435,21 @@ const findPath = {
         Object.entries(Game.spawns)
             .filter(([, spawn]) => spawn.isActive())
             .forEach(([spawnName, spawn]) => {
-            let cost = 0;
-            Game.map.findRoute(spawn.pos.roomName, roomName, {
-                routeCallback() {
-                    cost = cost + 1;
-                }
-            });
-            spawnDistanceMatrix[spawnName] = cost;
+            const routeToSpawn = Game.map.findRoute(spawn.pos.roomName, roomName);
+            spawnDistanceMatrix[spawnName] = Object.entries(routeToSpawn).length;
         });
-        Object.entries(spawnDistanceMatrix).sort(([spawnNameA], [spawnNameB]) => spawnDistanceMatrix[spawnNameB] - spawnDistanceMatrix[spawnNameA]);
-        const spawnName = Object.entries(spawnDistanceMatrix)[0][0];
+        const spawnName = Object.entries(spawnDistanceMatrix).sort(([spawnNameA], [spawnNameB]) => spawnDistanceMatrix[spawnNameA] - spawnDistanceMatrix[spawnNameB])[0][0];
         return Game.spawns[spawnName];
     },
     findClosestStorageToRoom(originRoomName) {
         const storageDistanceMatrix = {};
         Object.entries(Game.rooms).forEach(([roomName, room]) => {
             if (room.storage && room.storage.my) {
-                let cost = 0;
-                Game.map.findRoute(originRoomName, roomName, {
-                    routeCallback() {
-                        cost = cost + 1;
-                    }
-                });
-                storageDistanceMatrix[roomName] = cost;
+                const routeToStorage = Game.map.findRoute(originRoomName, roomName);
+                storageDistanceMatrix[roomName] = Object.entries(routeToStorage).length;
             }
         });
-        Object.entries(storageDistanceMatrix).sort(([storageRoomA], [storageRoomB]) => storageDistanceMatrix[storageRoomA] - storageDistanceMatrix[storageRoomB]);
-        const storageRoom = Object.entries(storageDistanceMatrix)[0][0];
+        const storageRoom = Object.entries(storageDistanceMatrix).sort(([storageRoomA], [storageRoomB]) => storageDistanceMatrix[storageRoomA] - storageDistanceMatrix[storageRoomB])[0][0];
         return Game.rooms[storageRoom].storage;
     },
     findSafePathToRoom(originRoomName, destinationRoomName) {
@@ -518,7 +506,8 @@ const creepNumbers = {
     labEngineer: 1,
     factoryEngineer: 1,
     tankRoom: 0,
-    dismantleEnemyBuildings: 1
+    dismantleEnemyBuildings: 1,
+    harvestDeposit: 1
 };
 
 const creepNumbersOverride = {
@@ -543,10 +532,17 @@ const creepNumbersOverride = {
     //   dismantleEnemyBuildings: 0
     // }
     W55N12: {
-        lootResource: 1
+        lootResource: 1,
+        upgradeController: 3
+    },
+    W55N11: {
+        transportResource: 0
     },
     W56N12: {
-        upgradeController: -1
+    // upgradeController: 0
+    },
+    W56N11: {
+        transportResource: 0
     }
 };
 
@@ -569,6 +565,15 @@ let ConstructionSiteOperator = class ConstructionSiteOperator {
         }
     }
     createConstructionSiteJob(roomName) {
+        let roomEnergyLow = false;
+        const room = Game.rooms[roomName];
+        if (room) {
+            if (room.storage) {
+                if (room.storage.store[RESOURCE_ENERGY] < 100000) {
+                    roomEnergyLow = true;
+                }
+            }
+        }
         let spawnRoom = roomName;
         if (Object.entries(Memory.rooms[roomName].monitoring.structures.spawns).length === 0) {
             spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
@@ -579,7 +584,15 @@ let ConstructionSiteOperator = class ConstructionSiteOperator {
             spawnRoom,
             jobType: "buildConstructionSite"
         };
-        const count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[roomName][JobParameters.jobType];
+        let count = creepNumbers[JobParameters.jobType];
+        if (creepNumbersOverride[roomName]) {
+            if (creepNumbersOverride[roomName][JobParameters.jobType]) {
+                count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[roomName][JobParameters.jobType];
+            }
+        }
+        if (roomEnergyLow) {
+            count = 0;
+        }
         new BuildConstructionSiteJob(JobParameters, count);
     }
     deleteConstructionSiteJob(roomName) {
@@ -676,6 +689,20 @@ let ControllerOperator = class ControllerOperator {
                         const controller = Game.getObjectById(controllerId);
                         if (controller) {
                             if (controller.my) {
+                                let roomEnergyLow = false;
+                                let roomDowngradeRisk = false;
+                                const room = controller.room;
+                                if (room) {
+                                    const storage = room.storage;
+                                    if (storage) {
+                                        if (storage.store[RESOURCE_ENERGY] < 100000) {
+                                            roomEnergyLow = true;
+                                        }
+                                    }
+                                }
+                                if (controller.ticksToDowngrade < 5000) {
+                                    roomDowngradeRisk = true;
+                                }
                                 let spawnRoom = controller.pos.roomName;
                                 if (Object.entries(controller.room.memory.monitoring.structures.spawns).length === 0) {
                                     spawnRoom = findPath.findClosestSpawnToRoom(controller.pos.roomName).pos.roomName;
@@ -691,6 +718,11 @@ let ControllerOperator = class ControllerOperator {
                                 if (creepNumbersOverride[roomName]) {
                                     if (creepNumbersOverride[roomName][JobParameters.jobType]) {
                                         count = count + creepNumbersOverride[roomName][JobParameters.jobType];
+                                    }
+                                }
+                                if (!roomDowngradeRisk) {
+                                    if (roomEnergyLow) {
+                                        count = 0;
                                     }
                                 }
                                 new UpgradeControllerJob(JobParameters, count);
@@ -721,7 +753,7 @@ const creepBodyParts = {
         mineSource: [WORK, WORK, MOVE, CARRY],
         workTerminal: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         feedSpawn: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
-        factoryEngineer: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
+        factoryEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         terminalEngineer: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         labEngineer: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         transportResource: [CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
@@ -735,7 +767,8 @@ const creepBodyParts = {
         tankRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
         dismantleEnemyBuildings: [MOVE],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+        harvestDeposit: [MOVE, WORK, CARRY]
     },
     2: {
         // Second level is the jobType.
@@ -756,84 +789,17 @@ const creepBodyParts = {
         tankRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
         dismantleEnemyBuildings: [MOVE],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+        harvestDeposit: [MOVE, WORK, CARRY]
     },
     3: {
         // Second level is the jobType.
         mineSource: [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, CARRY, CARRY],
-        workTerminal: [
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE
-        ],
+        workTerminal: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         feedSpawn: [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
-        factoryEngineer: [
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE
-        ],
-        terminalEngineer: [
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE
-        ],
-        labEngineer: [
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE
-        ],
+        factoryEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        terminalEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        labEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         transportResource: [
             CARRY,
             CARRY,
@@ -862,39 +828,13 @@ const creepBodyParts = {
         tankRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
         dismantleEnemyBuildings: [MOVE],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM]
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
+        harvestDeposit: [MOVE, WORK, CARRY]
     },
     4: {
         // Second level is the jobType.
         mineSource: [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CARRY],
-        workTerminal: [
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE
-        ],
+        workTerminal: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         feedSpawn: [
             CARRY,
             CARRY,
@@ -923,90 +863,9 @@ const creepBodyParts = {
             MOVE,
             MOVE
         ],
-        factoryEngineer: [
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE
-        ],
-        terminalEngineer: [
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE
-        ],
-        labEngineer: [
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE
-        ],
+        factoryEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        terminalEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        labEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         transportResource: [
             CARRY,
             CARRY,
@@ -1110,49 +969,13 @@ const creepBodyParts = {
         tankRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
         dismantleEnemyBuildings: [MOVE],
-        reserveRoom: [MOVE, MOVE, CLAIM, CLAIM]
+        reserveRoom: [MOVE, MOVE, CLAIM, CLAIM],
+        harvestDeposit: [MOVE, WORK, CARRY]
     },
     5: {
         // Second level is the jobType.
         mineSource: [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CARRY],
-        workTerminal: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
+        workTerminal: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         feedSpawn: [
             MOVE,
             MOVE,
@@ -1191,120 +1014,9 @@ const creepBodyParts = {
             CARRY,
             CARRY
         ],
-        factoryEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
-        terminalEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
-        labEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
+        factoryEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        terminalEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        labEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         transportResource: [
             MOVE,
             MOVE,
@@ -1484,59 +1196,41 @@ const creepBodyParts = {
         ],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
         dismantleEnemyBuildings: [MOVE],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM],
+        harvestDeposit: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY
+        ]
     },
     6: {
         // Second level is the jobType.
         mineSource: [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CARRY],
-        workTerminal: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
+        workTerminal: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         feedSpawn: [
             MOVE,
             MOVE,
@@ -1544,34 +1238,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY,
             CARRY,
             CARRY,
@@ -1585,150 +1251,9 @@ const creepBodyParts = {
             CARRY,
             CARRY
         ],
-        factoryEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
-        terminalEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
-        labEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
+        factoryEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        terminalEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        labEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         transportResource: [
             MOVE,
             MOVE,
@@ -1937,59 +1462,51 @@ const creepBodyParts = {
         ],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
         dismantleEnemyBuildings: [MOVE],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM],
+        harvestDeposit: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY
+        ]
     },
     7: {
         // Second level is the jobType.
         mineSource: [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CARRY],
-        workTerminal: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
+        workTerminal: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         feedSpawn: [
             MOVE,
             MOVE,
@@ -1997,34 +1514,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY,
             CARRY,
             CARRY,
@@ -2038,150 +1527,9 @@ const creepBodyParts = {
             CARRY,
             CARRY
         ],
-        factoryEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
-        terminalEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
-        labEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
+        factoryEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        terminalEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        labEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         transportResource: [
             MOVE,
             MOVE,
@@ -2228,6 +1576,10 @@ const creepBodyParts = {
             CARRY,
             CARRY,
             CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
             CARRY
         ],
         feedTower: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
@@ -2252,6 +1604,19 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
             WORK,
             WORK,
             WORK,
@@ -2291,6 +1656,19 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
             WORK,
             WORK,
             WORK,
@@ -2324,12 +1702,40 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
             HEAL,
             HEAL,
             HEAL,
@@ -2389,60 +1795,116 @@ const creepBodyParts = {
             MOVE
         ],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        dismantleEnemyBuildings: [MOVE],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
+        dismantleEnemyBuildings: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK
+        ],
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM],
+        harvestDeposit: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY
+        ]
     },
     8: {
         // Second level is the jobType.
         mineSource: [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CARRY],
-        workTerminal: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
+        workTerminal: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         feedSpawn: [
             MOVE,
             MOVE,
@@ -2450,34 +1912,6 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
             CARRY,
             CARRY,
             CARRY,
@@ -2491,150 +1925,9 @@ const creepBodyParts = {
             CARRY,
             CARRY
         ],
-        factoryEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
-        terminalEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
-        labEngineer: [
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            MOVE,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY,
-            CARRY
-        ],
+        factoryEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        terminalEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        labEngineer: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         transportResource: [
             MOVE,
             MOVE,
@@ -2661,6 +1954,10 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
             CARRY,
             CARRY,
             CARRY,
@@ -2757,6 +2054,19 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
             WORK,
             WORK,
             WORK,
@@ -2790,12 +2100,40 @@ const creepBodyParts = {
             MOVE,
             MOVE,
             MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
             ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            ATTACK,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
+            HEAL,
             HEAL,
             HEAL,
             HEAL,
@@ -2855,1207 +2193,112 @@ const creepBodyParts = {
             MOVE
         ],
         claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-        dismantleEnemyBuildings: [MOVE],
-        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM]
+        dismantleEnemyBuildings: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK
+        ],
+        reserveRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM, CLAIM],
+        harvestDeposit: [
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            MOVE,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            WORK,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY,
+            CARRY
+        ]
     }
-    //   7: {
-    //     // Second level is the jobType.
-    //     mineSource: [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CARRY],
-    //     workTerminal: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     feedSpawn: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     factoryEngineer: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     terminalEngineer: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     labEngineer: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     transportResource: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     feedTower: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
-    //     feedLink: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
-    //     lootResource: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
-    //     upgradeController: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     buildConstructionSite: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
-    //     defendRoom: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL
-    //     ],
-    //     tankRoom: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE
-    //     ],
-    //     claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-    //     dismantleEnemyBuildings: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK
-    //     ],
-    //     reserveRoom: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM
-    //     ]
-    //   },
-    //   8: {
-    //     // Second level is the jobType.
-    //     mineSource: [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, CARRY],
-    //     workTerminal: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     feedSpawn: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     factoryEngineer: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     terminalEngineer: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     labEngineer: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     transportResource: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     feedTower: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
-    //     feedLink: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
-    //     lootResource: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
-    //     upgradeController: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     buildConstructionSite: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY,
-    //       CARRY
-    //     ],
-    //     scoutRoom: [MOVE, MOVE, MOVE, MOVE, MOVE],
-    //     defendRoom: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       ATTACK,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL,
-    //       HEAL
-    //     ],
-    //     tankRoom: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       TOUGH,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE
-    //     ],
-    //     claimRoom: [MOVE, MOVE, MOVE, MOVE, MOVE, CLAIM],
-    //     dismantleEnemyBuildings: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK,
-    //       WORK
-    //     ],
-    //     reserveRoom: [
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       MOVE,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM,
-    //       CLAIM
-    //     ]
-    //   }
 };
 
 function fetchBodyParts(creepType, roomName) {
@@ -4263,6 +2506,7 @@ function fetchBodyParts(creepType, roomName) {
 
 const movePathColors = {
     mineSource: "#FFEB3B",
+    harvestDeposit: "#FFEB3B",
     workTerminal: "#66BB6A",
     feedSpawn: "#DCE775",
     feedTower: "#D4E157",
@@ -4306,36 +2550,50 @@ let BaseCreep = class BaseCreep {
     }
     checkIfFull(creep, resource) {
         if (creep.memory.status === "fetchingResource") {
-            if (creep.store.getFreeCapacity(resource) === 0) {
-                if (creep.store.getCapacity(resource) === creep.store[resource]) {
-                    creep.memory.status = "working";
-                }
-                else {
-                    if (creep.store.getFreeCapacity(resource) === 0) {
-                        Object.entries(creep.store).forEach(([resourceType]) => {
-                            if (resourceType !== resource) {
-                                if (resourceType === RESOURCE_ENERGY) {
-                                    if (creep.room.storage) {
-                                        this.depositResource(creep, creep.room.storage, resourceType);
-                                    }
-                                }
-                                else {
-                                    if (creep.room.terminal) {
-                                        this.depositResource(creep, creep.room.terminal, resourceType);
+            if (resource) {
+                if (creep.store.getFreeCapacity(resource) === 0) {
+                    if (creep.store.getCapacity(resource) === creep.store[resource]) {
+                        creep.memory.status = "working";
+                    }
+                    else {
+                        if (creep.store.getFreeCapacity(resource) === 0) {
+                            Object.entries(creep.store).forEach(([resourceType]) => {
+                                if (resourceType !== resource) {
+                                    if (resourceType === RESOURCE_ENERGY) {
+                                        if (creep.room.storage) {
+                                            this.depositResource(creep, creep.room.storage, resourceType);
+                                        }
                                     }
                                     else {
-                                        creep.drop(resourceType);
+                                        if (creep.room.terminal) {
+                                            this.depositResource(creep, creep.room.terminal, resourceType);
+                                        }
+                                        else {
+                                            creep.drop(resourceType);
+                                        }
                                     }
                                 }
-                            }
-                        });
+                            });
+                        }
                     }
+                }
+            }
+            else {
+                if (creep.store.getFreeCapacity() === 0) {
+                    creep.memory.status = "working";
                 }
             }
         }
         else if (creep.memory.status === "working") {
-            if (creep.store[resource] === 0 && creep.store.getFreeCapacity(resource) > 0) {
-                creep.memory.status = "fetchingResource";
+            if (resource) {
+                if (creep.store[resource] === 0 && creep.store.getFreeCapacity(resource) > 0) {
+                    creep.memory.status = "fetchingResource";
+                }
+            }
+            else {
+                if (creep.store.getFreeCapacity() > 0) {
+                    creep.memory.status = "fetchingResource";
+                }
             }
         }
     }
@@ -4396,15 +2654,12 @@ let BaseCreep = class BaseCreep {
         }
         if (creep.memory.status === "movingIntoRoom") {
             if (creep.pos.roomName === creep.memory.room) {
-                delete creep.memory.safeRoute;
                 creep.memory.status = "working";
             }
             else {
                 // this.moveCreep(creep, new RoomPosition(25, 25, creep.memory.room));
-                if (!creep.memory.safeRoute) {
-                    creep.memory.safeRoute = this.fetchSafePath(creep, creep.memory.room);
-                }
-                this.moveCreep(creep, creep.memory.safeRoute[0]);
+                const destination = findPath.findClearTerrain(creep.memory.room);
+                this.moveCreep(creep, destination);
             }
         }
     }
@@ -4422,34 +2677,8 @@ let BaseCreep = class BaseCreep {
         return safeRoute;
     }
     moveCreep(creep, destination) {
-        let nextDestination = new RoomPosition(destination.x, destination.y, destination.roomName);
-        if (creep.pos.roomName !== destination.roomName) {
-            if (!creep.memory.safeRoute) {
-                creep.memory.safeRoute = this.fetchSafePath(creep, destination.roomName);
-            }
-        }
-        if (creep.memory.safeRoute) {
-            if (Object.entries(creep.memory.safeRoute).length > 1) {
-                if (creep.memory.safeRoute[0].roomName === creep.pos.roomName) {
-                    const newCreepSafeRouteMemory = Object.entries(creep.memory.safeRoute).splice(0, 1);
-                    const creepSafeRouteArray = [];
-                    newCreepSafeRouteMemory.forEach(([, safeRouteRoomPosition]) => {
-                        creepSafeRouteArray.push(safeRouteRoomPosition);
-                    });
-                    creep.memory.safeRoute = creepSafeRouteArray;
-                    nextDestination = new RoomPosition(creep.memory.safeRoute[0].x, creep.memory.safeRoute[0].y, creep.memory.safeRoute[0].roomName);
-                }
-            }
-            if (Object.entries(creep.memory.safeRoute).length === 1) {
-                if (creep.pos.roomName === creep.memory.safeRoute[0].roomName) {
-                    delete creep.memory.safeRoute;
-                }
-                else {
-                    nextDestination = new RoomPosition(creep.memory.safeRoute[0].x, creep.memory.safeRoute[0].y, creep.memory.safeRoute[0].roomName);
-                }
-            }
-        }
-        const moveResult = creep.moveTo(nextDestination, {
+        // console.log(`${creep.memory.room} - ${creep.memory.jobType} - ${creep.pos} - ${destination}`);
+        const moveResult = creep.moveTo(destination, {
             visualizePathStyle: {
                 fill: "transparent",
                 stroke: movePathColors[creep.memory.jobType],
@@ -4459,6 +2688,16 @@ let BaseCreep = class BaseCreep {
             }
         });
         return moveResult;
+    }
+    harvestDeposit(creep, deposit) {
+        const harvestResult = creep.harvest(deposit);
+        if (harvestResult === ERR_NOT_IN_RANGE) {
+            const moveResult = this.moveCreep(creep, deposit.pos);
+            return moveResult;
+        }
+        else {
+            return harvestResult;
+        }
     }
     harvestSource(creep, source) {
         const harvestResult = creep.harvest(source);
@@ -4570,7 +2809,7 @@ let BaseCreep = class BaseCreep {
             else {
                 const droppedResourceArray = [];
                 Object.entries(creep.room.memory.monitoring.droppedResources)
-                    .filter(DroppedResource => DroppedResource[1].resourceType === RESOURCE_ENERGY)
+                    .filter(([, DroppedResource]) => DroppedResource.resourceType === RESOURCE_ENERGY)
                     .forEach(([droppedResourceId]) => {
                     const droppedResource = Game.getObjectById(droppedResourceId);
                     if (droppedResource) {
@@ -4642,15 +2881,15 @@ let BaseCreep = class BaseCreep {
     lookAroundCreep(creep) {
         creep.pos;
         const lookAreaBoundaryCoordinateArray = [
-            [creep.pos.x - 1, creep.pos.y + 1],
-            [creep.pos.x, creep.pos.y + 1],
-            [creep.pos.x + 1, creep.pos.y + 1],
-            [creep.pos.x - 1, creep.pos.y],
-            [creep.pos.x, creep.pos.y],
-            [creep.pos.x + 1, creep.pos.y],
-            [creep.pos.x - 1, creep.pos.y - 1],
-            [creep.pos.x, creep.pos.y - 1],
-            [creep.pos.x + 1, creep.pos.y - 1]
+            [Math.min(Math.max(1, creep.pos.x - 1), 50), Math.min(Math.max(1, creep.pos.y + 1), 50)],
+            [Math.min(Math.max(1, creep.pos.x), 50), Math.min(Math.max(creep.pos.y + 1, 1), 50)],
+            [Math.min(Math.max(1, creep.pos.x + 1), 50), Math.min(Math.max(creep.pos.y + 1, 1), 50)],
+            [Math.min(Math.max(1, creep.pos.x - 1), 50), Math.min(Math.max(creep.pos.y, 1), 50)],
+            [Math.min(Math.max(1, creep.pos.x), 50), Math.min(Math.max(creep.pos.y, 1), 50)],
+            [Math.min(Math.max(1, creep.pos.x + 1), 50), Math.min(Math.max(creep.pos.y, 1), 50)],
+            [Math.min(Math.max(1, creep.pos.x - 1), 50), Math.min(Math.max(creep.pos.y - 1, 1), 50)],
+            [Math.min(Math.max(1, creep.pos.x), 50), Math.min(Math.max(creep.pos.y - 1, 1), 50)],
+            [Math.min(Math.max(1, creep.pos.x + 1), 50), Math.min(Math.max(creep.pos.y - 1, 1), 50)]
         ];
         const lookResults = [];
         lookAreaBoundaryCoordinateArray.forEach(([lookAreaBoundaryCoordinateX, lookAreaBoundaryCoordinateY]) => {
@@ -4830,21 +3069,67 @@ let DismantleEnemyBuildingsCreep = class DismantleEnemyBuildingsCreep extends Ba
         if (creep.memory.status === "working") {
             let buildingToDismantle;
             if (creep.room.name === creep.memory.room) {
-                if (creep.room.memory.monitoring.structures.spawns) {
-                    const cachedSpawnsInRoomDictionary = Object.entries(creep.room.memory.monitoring.structures.spawns);
-                    if (cachedSpawnsInRoomDictionary.length > 0) {
-                        if (cachedSpawnsInRoomDictionary.length === 1) {
-                            const spawnToDismantleId = cachedSpawnsInRoomDictionary[0][1].id;
-                            const spawnToDismantle = Game.getObjectById(spawnToDismantleId);
-                            if (spawnToDismantle) {
-                                buildingToDismantle = spawnToDismantle;
+                if (creep.room.memory) {
+                    if (Object.entries(creep.room.memory.monitoring.structures.spawns).length > 0) {
+                        const cachedSpawnsInRoomDictionary = Object.entries(creep.room.memory.monitoring.structures.spawns);
+                        if (cachedSpawnsInRoomDictionary.length > 0) {
+                            if (cachedSpawnsInRoomDictionary.length === 1) {
+                                const spawnToDismantleId = cachedSpawnsInRoomDictionary[0][1].id;
+                                const spawnToDismantle = Game.getObjectById(spawnToDismantleId);
+                                if (spawnToDismantle) {
+                                    buildingToDismantle = spawnToDismantle;
+                                }
                             }
                         }
                     }
                     else {
-                        const manualRampartToKill = Game.getObjectById("63341e08b0485dbcf5342fd4");
-                        if (manualRampartToKill) {
-                            buildingToDismantle = manualRampartToKill;
+                        if (creep.room.memory.monitoring.structures.storage) {
+                            buildingToDismantle = creep.room.storage;
+                        }
+                        else {
+                            const hostileExtensionsDictionary = Object.entries(creep.room.memory.monitoring.structures.extensions);
+                            if (hostileExtensionsDictionary.length > 0) {
+                                const hostileExtensionArray = [];
+                                hostileExtensionsDictionary.forEach(([hostileExtensionId]) => {
+                                    const hostileExtension = Game.getObjectById(hostileExtensionId);
+                                    if (hostileExtension) {
+                                        hostileExtensionArray.push(hostileExtension);
+                                    }
+                                });
+                                if (hostileExtensionArray.length > 0) {
+                                    buildingToDismantle = hostileExtensionArray[0];
+                                }
+                            }
+                            else {
+                                const hostileLinksDictionary = Object.entries(creep.room.memory.monitoring.structures.links);
+                                if (hostileLinksDictionary.length > 0) {
+                                    const hostileLinkArray = [];
+                                    hostileLinksDictionary.forEach(([hostileLinkId]) => {
+                                        const hostileLink = Game.getObjectById(hostileLinkId);
+                                        if (hostileLink) {
+                                            hostileLinkArray.push(hostileLink);
+                                        }
+                                    });
+                                    if (hostileLinkArray.length > 0) {
+                                        buildingToDismantle = hostileLinkArray[0];
+                                    }
+                                }
+                                else {
+                                    const hostileTowersDictionary = Object.entries(creep.room.memory.monitoring.structures.towers);
+                                    if (hostileTowersDictionary.length > 0) {
+                                        const hostileTowerArray = [];
+                                        hostileTowersDictionary.forEach(([hostileTowerId]) => {
+                                            const hostileTower = Game.getObjectById(hostileTowerId);
+                                            if (hostileTower) {
+                                                hostileTowerArray.push(hostileTower);
+                                            }
+                                        });
+                                        if (hostileTowerArray.length > 0) {
+                                            buildingToDismantle = hostileTowerArray[0];
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -5013,9 +3298,6 @@ let FeedTowerCreep = class FeedTowerCreep extends BaseCreep {
         if (creep.memory.towerId) {
             const tower = Game.getObjectById(creep.memory.towerId);
             if (tower) {
-                if (creep.memory.status === "recyclingCreep") {
-                    creep.memory.status = "working";
-                }
                 this.checkIfFull(creep, RESOURCE_ENERGY);
                 if (creep.memory.status === "fetchingResource") {
                     this.fetchSource(creep);
@@ -5032,6 +3314,64 @@ let FeedTowerCreep = class FeedTowerCreep extends BaseCreep {
 FeedTowerCreep = __decorate([
     profile
 ], FeedTowerCreep);
+
+let harvestDepositCreep = class harvestDepositCreep extends BaseCreep {
+    constructor(creep) {
+        super(creep);
+        this.runCreep(creep);
+    }
+    runCreep(creep) {
+        if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
+            if (creep.memory.status === "fetchingResource") {
+                if (creep.pos.roomName !== creep.memory.room) {
+                    this.moveHome(creep);
+                    creep.memory.status = "fetchingResource";
+                }
+                else {
+                    console.log(creep);
+                    if (creep.memory.depositId) {
+                        const deposit = Game.getObjectById(creep.memory.depositId);
+                        if (deposit) {
+                            this.harvestDeposit(creep, deposit);
+                            this.checkIfFull(creep, deposit.depositType);
+                        }
+                    }
+                }
+            }
+            else if (creep.memory.status === "working") {
+                this.checkIfFull(creep);
+                if (creep.memory.storage) {
+                    const storage = Game.getObjectById(creep.memory.storage);
+                    if (storage) {
+                        if (storage.room) {
+                            const currentResources = [];
+                            Object.entries(creep.store).forEach(([resourceType]) => {
+                                currentResources.push(resourceType);
+                            });
+                            if (storage.room.terminal) {
+                                this.depositResource(creep, storage.room.terminal, currentResources[0]);
+                            }
+                            else {
+                                this.depositResource(creep, storage, currentResources[0]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            if (creep.pos.roomName === creep.memory.room) {
+                creep.memory.status = "fetchingResource";
+            }
+            else {
+                this.moveHome(creep);
+            }
+        }
+    }
+};
+harvestDepositCreep = __decorate([
+    profile
+], harvestDepositCreep);
 
 let LabEngineerCreep = class LabEngineerCreep extends BaseCreep {
     constructor(creep) {
@@ -5125,17 +3465,17 @@ let LootResourceCreep = class LootResourceCreep extends BaseCreep {
     runCreep(creep) {
         this.checkIfFull(creep, RESOURCE_ENERGY);
         if (creep.memory.status === "fetchingResource") {
-            const resourceArray = [];
+            const droppedResourceArray = [];
             Object.entries(creep.room.memory.monitoring.droppedResources)
                 .sort(([, droppedResourceEntryA], [, droppedResourceEntryB]) => droppedResourceEntryB.amount - droppedResourceEntryA.amount)
                 .forEach(([resourceIdString]) => {
                 const resourceId = resourceIdString;
                 const resource = Game.getObjectById(resourceId);
                 if (resource) {
-                    resourceArray.push(resource);
+                    droppedResourceArray.push(resource);
                 }
             });
-            const nextResource = resourceArray[0];
+            const nextResource = droppedResourceArray[0];
             if (nextResource) {
                 this.pickupResource(creep, nextResource);
             }
@@ -5163,10 +3503,7 @@ let ReserveRoomCreep = class ReserveRoomCreep extends BaseCreep {
         this.runCreep(creep);
     }
     runCreep(creep) {
-        this.checkIfRecyclable(creep);
-        if (creep.memory.status !== "recyclingCreep") {
-            this.moveHome(creep);
-        }
+        this.moveHome(creep);
         if (creep.memory.status === "working") {
             if (Memory.rooms[creep.memory.room].monitoring.structures.controller) {
                 const controllerToReserveMemory = Memory.rooms[creep.memory.room].monitoring.structures.controller;
@@ -5242,41 +3579,22 @@ let SourceMinerCreep = class SourceMinerCreep extends BaseCreep {
         this.runCreep(creep);
     }
     runCreep(creep) {
-        // this.checkBodyParts(creep);
-        if (creep.memory.status !== "recyclingCreep") {
-            this.moveHome(creep);
-            if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
-                let dropEnergy = true;
-                const creepSurroundings = this.lookAroundCreep(creep);
-                creepSurroundings.forEach(([lookAtResults]) => {
-                    var _a;
-                    if (lookAtResults.type === "structure") {
-                        if (((_a = lookAtResults.structure) === null || _a === void 0 ? void 0 : _a.structureType) === "storage") {
-                            dropEnergy = false;
-                        }
-                    }
-                });
-                if (creep.memory.sourceId) {
-                    const source = Game.getObjectById(creep.memory.sourceId);
-                    if (source) {
-                        this.harvestSource(creep, source);
-                        if (dropEnergy === true) {
-                            creep.drop(RESOURCE_ENERGY);
-                        }
-                        else {
-                            if (creep.room.memory.monitoring.structures.storage) {
-                                const storage = Game.getObjectById(creep.room.memory.monitoring.structures.storage.id);
-                                if (storage) {
-                                    creep.transfer(storage, RESOURCE_ENERGY);
-                                }
+        this.moveHome(creep);
+        if (creep.memory.status === "working" || creep.memory.status === "fetchingResource") {
+            if (creep.memory.sourceId) {
+                const source = Game.getObjectById(creep.memory.sourceId);
+                if (source) {
+                    const harvestResult = this.harvestSource(creep, source);
+                    if (harvestResult === OK) {
+                        if (creep.room.storage) {
+                            const transferResult = creep.transfer(creep.room.storage, RESOURCE_ENERGY);
+                            if (transferResult !== OK) {
+                                creep.drop(RESOURCE_ENERGY);
                             }
                         }
                     }
                 }
             }
-        }
-        else {
-            creep.memory.status = "working";
         }
     }
 };
@@ -5375,19 +3693,29 @@ let TransportResourceCreep = class TransportResourceCreep extends BaseCreep {
                 creep.memory.status = "fetchingResource";
             }
             else {
-                const resourceArray = [];
-                Object.entries(creep.room.memory.monitoring.droppedResources)
-                    .filter(([, resourceMemory]) => resourceMemory.resourceType === creep.memory.resourceType)
-                    .forEach(([resourceIdString]) => {
-                    const resourceId = resourceIdString;
-                    const resource = Game.getObjectById(resourceId);
-                    if (resource) {
-                        resourceArray.push(resource);
+                if (!creep.memory.resourceOrigin) {
+                    const droppedResourceArray = [];
+                    Object.entries(creep.room.memory.monitoring.droppedResources)
+                        .filter(([, DroppedResource]) => DroppedResource.resourceType === creep.memory.resourceType)
+                        .forEach(([resourceIdString]) => {
+                        const resourceId = resourceIdString;
+                        const resource = Game.getObjectById(resourceId);
+                        if (resource) {
+                            droppedResourceArray.push(resource);
+                        }
+                    });
+                    const largestResource = droppedResourceArray.sort((droppedResourceA, droppedResourceB) => droppedResourceB.amount - droppedResourceA.amount)[0];
+                    if (largestResource) {
+                        this.pickupResource(creep, largestResource);
                     }
-                });
-                const nearestResource = creep.pos.findClosestByPath(resourceArray);
-                if (nearestResource) {
-                    this.pickupResource(creep, nearestResource);
+                }
+                else {
+                    const resourceContainer = Game.getObjectById(creep.memory.resourceOrigin);
+                    if (resourceContainer) {
+                        if (creep.memory.resourceType) {
+                            this.withdrawResource(creep, resourceContainer, creep.memory.resourceType);
+                        }
+                    }
                 }
             }
         }
@@ -5504,6 +3832,9 @@ class CreepOperator {
                 case "dismantleEnemyBuildings":
                     new DismantleEnemyBuildingsCreep(creepToOperate);
                     break;
+                case "harvestDeposit":
+                    new harvestDepositCreep(creepToOperate);
+                    break;
                 default:
                     Log.Alert(
                     // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
@@ -5517,7 +3848,8 @@ class FactoryEngineerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -5618,6 +3950,11 @@ let FactoryOperator = class FactoryOperator {
                 factoryId: factory.id
             };
             let count = creepNumbers[jobParameters.jobType];
+            if (creepNumbersOverride[jobParameters.room]) {
+                if (creepNumbersOverride[jobParameters.room][jobParameters.jobType]) {
+                    count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
+                }
+            }
             const factoryJobs = Object.entries(factory.room.memory.queues.factoryQueue);
             if (factoryJobs.length === 0) {
                 count = 0;
@@ -5650,7 +3987,8 @@ class LabEngineerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -5698,6 +4036,9 @@ class LabEngineerJob {
 const labConfiguration = {
     W56N12: {
         boostLab: "63a1e52f46d2f61382721fbf"
+    },
+    W55N12: {
+        boostLab: "63ca254cb1aab869d0dc5f4c"
     }
 };
 
@@ -5788,6 +4129,11 @@ let LabOperator = class LabOperator {
                 jobType: "labEngineer"
             };
             let count = creepNumbers[jobParameters.jobType];
+            if (creepNumbersOverride[jobParameters.room]) {
+                if (creepNumbersOverride[jobParameters.room][jobParameters.jobType]) {
+                    count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
+                }
+            }
             const labJobs = Object.entries(Memory.rooms[roomName].queues.labQueue);
             if (labJobs.length === 0) {
                 count = 0;
@@ -5804,7 +4150,8 @@ class FeedLinkJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -5987,7 +4334,8 @@ function creepPriority(room) {
         labEngineer: 15,
         factoryEngineer: 16,
         tankRoom: 17,
-        dismantleEnemyBuildings: 18
+        dismantleEnemyBuildings: 18,
+        harvestDeposit: 19
     };
     if (room) {
         let storageContainsEnergy = false;
@@ -6000,7 +4348,7 @@ function creepPriority(room) {
                 }
             }
         }
-        if (Object.entries(room.memory.monitoring.droppedResources).length > 0) {
+        if (Object.entries(room.memory.monitoring.droppedResources).filter(([, DroppedResource]) => DroppedResource.resourceType === RESOURCE_ENERGY).length > 0) {
             roomContainsDroppedEnergy = true;
         }
         if (Object.entries(Memory.creeps).filter(([, creepMemory]) => creepMemory.jobType === "feedSpawn").length === 0) {
@@ -6025,7 +4373,8 @@ function creepPriority(room) {
                 labEngineer: priority.labEngineer,
                 factoryEngineer: priority.factoryEngineer,
                 tankRoom: priority.tankRoom,
-                dismantleEnemyBuildings: priority.dismantleEnemyBuildings
+                dismantleEnemyBuildings: priority.dismantleEnemyBuildings,
+                harvestDeposit: priority.harvestDeposit
             };
         }
     }
@@ -6079,7 +4428,8 @@ class ClaimRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -6128,7 +4478,8 @@ class ReserveRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -6171,7 +4522,7 @@ class ReserveRoomJob {
     }
     deleteJob(UUID) {
         if (Memory.queues.jobQueue[UUID]) {
-            Log.Informational(`Deleting "ReserveRoomJob" for Tower ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
+            Log.Informational(`Deleting "ReserveRoomJob" for Room ID "${this.JobParameters.room} with the UUID of ${UUID}"`);
             delete Memory.queues.jobQueue[UUID];
         }
     }
@@ -6181,7 +4532,8 @@ class ScoutRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -6228,8 +4580,11 @@ class ScoutRoomJob {
 
 const roomsToClaim = [];
 
-// export const roomsToMine: string[] = ["W56N11", "W55N11"];
-const roomsToMine = [];
+const roomsToHarvestDeposits = [];
+
+const roomsToMine = ["W56N11", "W55N11"];
+// export const roomsToMine: string[] = ["W56N11"];
+// export const roomsToMine: string[] = [];
 
 const roomOperations = {
     generateRoomsArray(roomOperation) {
@@ -6242,11 +4597,17 @@ const roomOperations = {
                 if (roomOperation === "claim") {
                     roomsArray = roomsToClaim;
                 }
+                else {
+                    if (roomOperation === "harvestDeposits") {
+                        roomsArray = roomsToHarvestDeposits;
+                    }
+                }
             }
         }
         else {
             roomsArray = roomsArray.concat(roomsToMine);
             roomsArray = roomsArray.concat(roomsToClaim);
+            roomsArray = roomsArray.concat(roomsToHarvestDeposits);
             Object.entries(Game.rooms).forEach(([roomName, room]) => {
                 let monitorRoom = false;
                 if (room) {
@@ -6272,7 +4633,8 @@ class TankRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -6323,7 +4685,8 @@ class DefendRoomJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -6374,7 +4737,8 @@ class DismantleEnemyBuildingsJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -6419,14 +4783,67 @@ class DismantleEnemyBuildingsJob {
     }
 }
 
+class HarvestDepositJob {
+    constructor(JobParameters, count = 1) {
+        this.JobParameters = JobParameters;
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.depositId === this.JobParameters.depositId)
+            .forEach(([jobUUID, jobMemory]) => {
+            if (jobMemory.index > count) {
+                this.deleteJob(jobUUID);
+            }
+        });
+        if (count === 1) {
+            const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.depositId}-1`);
+            this.createJob(UUID, 1);
+        }
+        else {
+            let iterations = 1;
+            while (iterations <= count) {
+                const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.depositId}-${iterations}`);
+                this.createJob(UUID, iterations);
+                iterations++;
+            }
+        }
+    }
+    createJob(UUID, index) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Creating "HarvestDepositJob" for Deposit ID: "${this.JobParameters.depositId}" with the UUID "${UUID}"`);
+            Memory.queues.jobQueue[UUID] = {
+                jobParameters: {
+                    uuid: UUID,
+                    status: "working",
+                    spawnRoom: this.JobParameters.spawnRoom,
+                    room: this.JobParameters.room,
+                    jobType: "harvestDeposit",
+                    depositId: this.JobParameters.depositId,
+                    storage: this.JobParameters.storage
+                },
+                index,
+                room: this.JobParameters.room,
+                jobType: "harvestDeposit",
+                timeAdded: Game.time
+            };
+        }
+    }
+    deleteJob(UUID) {
+        if (!Memory.queues.jobQueue[UUID]) {
+            Log.Informational(`Deleting  "HarvestDepositJob" for Deposit ID: "${this.JobParameters.depositId}" with the UUID "${UUID}"`);
+            delete Memory.queues.jobQueue[UUID];
+        }
+    }
+}
+
 let RoomOperator = class RoomOperator {
     constructor() {
         this.maintainTankRoomJobs();
         this.maintainDismantleEnemyBuildingsJobs();
         const roomsToOperate = roomOperations.generateRoomsArray();
         roomsToOperate.forEach(roomName => {
-            var _a, _b, _c, _d;
+            var _a;
             this.maintainDefendRoomJobs(roomName);
+            this.maintainHarvestDepositJob(roomName);
             // console.log(`${Game.time.toString()} - ${roomName}`);
             const room = Game.rooms[roomName];
             if (room) {
@@ -6438,14 +4855,30 @@ let RoomOperator = class RoomOperator {
                             this.createClaimRoomJob(roomName);
                         }
                         if (roomOperations.generateRoomsArray("mine").includes(roomName)) {
-                            if (!(((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.reservation) === null || _b === void 0 ? void 0 : _b.username) === myScreepsUsername)) {
-                                if ((_c = room.controller) === null || _c === void 0 ? void 0 : _c.upgradeBlocked) {
-                                    if (((_d = room.controller) === null || _d === void 0 ? void 0 : _d.upgradeBlocked) < 150) {
-                                        this.createReserveRoomJob(roomName);
-                                    }
+                            if (((_a = roomController.reservation) === null || _a === void 0 ? void 0 : _a.username) !== myScreepsUsername) {
+                                if (!roomController.upgradeBlocked) {
+                                    this.createReserveRoomJob(roomName);
                                 }
                                 else {
+                                    if (roomController.upgradeBlocked < 150) {
+                                        this.createReserveRoomJob(roomName);
+                                    }
+                                    else {
+                                        this.deleteReserveRoomJob(roomName);
+                                    }
+                                }
+                            }
+                            else {
+                                if (!roomController.reservation) {
                                     this.createReserveRoomJob(roomName);
+                                }
+                                else {
+                                    if (roomController.reservation.ticksToEnd < 1500) {
+                                        this.createReserveRoomJob(roomName);
+                                    }
+                                    else {
+                                        this.deleteReserveRoomJob(roomName);
+                                    }
                                 }
                             }
                         }
@@ -6466,6 +4899,35 @@ let RoomOperator = class RoomOperator {
             spawnRoom
         };
         new ScoutRoomJob(jobParameters);
+    }
+    maintainHarvestDepositJob(roomName) {
+        const depositMonitorMemory = Memory.rooms[roomName].monitoring.deposit;
+        if (depositMonitorMemory) {
+            const depositId = depositMonitorMemory.depositId;
+            if (depositId) {
+                const storage = findPath.findClosestStorageToRoom(roomName);
+                if (storage) {
+                    const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+                    const jobParameters = {
+                        jobType: "harvestDeposit",
+                        status: "movingIntoRoom",
+                        room: roomName,
+                        spawnRoom,
+                        depositId,
+                        storage: storage.id
+                    };
+                    const count = creepNumbers[jobParameters.jobType];
+                    new HarvestDepositJob(jobParameters, count);
+                }
+            }
+        }
+        Object.entries(Memory.queues.jobQueue)
+            .filter(([, jobQueueEntry]) => jobQueueEntry.jobType === "harvestDeposits")
+            .forEach(([jobQueueUUID, jobQueueEntry]) => {
+            if (!roomsToHarvestDeposits.includes(jobQueueEntry.room)) {
+                delete Memory.queues.jobQueue[jobQueueUUID];
+            }
+        });
     }
     maintainTankRoomJobs() {
         roomsToTank.forEach(roomName => {
@@ -6535,42 +4997,48 @@ let RoomOperator = class RoomOperator {
             room: roomName,
             spawnRoom
         };
-        new ClaimRoomJob(jobParameters);
+        const count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
+        new ClaimRoomJob(jobParameters, count);
     }
-    createReserveRoomJob(roomName) {
-        let postponeCreate = false;
-        const room = Game.rooms[roomName];
-        if (room) {
-            if (room.controller) {
-                if (room.controller.upgradeBlocked) {
-                    if (room.controller.upgradeBlocked > 150) {
-                        postponeCreate = true;
-                    }
-                    if (room.controller.reservation) {
-                        if (room.controller.reservation.username === myScreepsUsername) {
-                            if (room.controller.reservation.ticksToEnd > 1000) {
-                                postponeCreate = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else {
-            postponeCreate = true;
-        }
+    deleteClaimRoomJob(roomName) {
         const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
         const jobParameters = {
-            jobType: "reserveRoom",
+            jobType: "claimRoom",
             status: "movingIntoRoom",
             room: roomName,
             spawnRoom
         };
-        if (!postponeCreate) {
-            new ReserveRoomJob(jobParameters);
+        new ClaimRoomJob(jobParameters, 0);
+    }
+    createReserveRoomJob(roomName) {
+        const room = Game.rooms[roomName];
+        if (room) {
+            if (room.controller) {
+                const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+                const jobParameters = {
+                    jobType: "reserveRoom",
+                    status: "movingIntoRoom",
+                    room: roomName,
+                    spawnRoom
+                };
+                creepNumbers[jobParameters.jobType];
+                new ReserveRoomJob(jobParameters);
+            }
         }
-        else {
-            new ReserveRoomJob(jobParameters, 0);
+    }
+    deleteReserveRoomJob(roomName) {
+        const room = Game.rooms[roomName];
+        if (room) {
+            if (room.controller) {
+                const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+                const jobParameters = {
+                    jobType: "reserveRoom",
+                    status: "movingIntoRoom",
+                    room: roomName,
+                    spawnRoom
+                };
+                new ReserveRoomJob(jobParameters, 0);
+            }
         }
     }
 };
@@ -6632,18 +5100,35 @@ class MineSourceJob {
 class TransportResourceJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
-        Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
-            .forEach(([jobUUID, jobMemory]) => {
-            if (jobMemory.index > count) {
+        if (count === 0) {
+            Object.entries(Memory.queues.jobQueue)
+                .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+                jobMemory.jobParameters.room === this.JobParameters.room)
+                .forEach(([jobUUID]) => {
                 this.deleteJob(jobUUID);
-            }
-        });
+            });
+        }
         if (count === 1) {
+            Object.entries(Memory.queues.jobQueue)
+                .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+                jobMemory.jobParameters.room === this.JobParameters.room)
+                .forEach(([jobUUID, jobMemory]) => {
+                if (jobMemory.index > count) {
+                    this.deleteJob(jobUUID);
+                }
+            });
             const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${this.JobParameters.resourceType}-${this.JobParameters.storage}-1`);
             this.createJob(UUID, 1);
         }
         else {
+            Object.entries(Memory.queues.jobQueue)
+                .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+                jobMemory.jobParameters.room === this.JobParameters.room)
+                .forEach(([jobUUID, jobMemory]) => {
+                if (jobMemory.index > count) {
+                    this.deleteJob(jobUUID);
+                }
+            });
             let iterations = 1;
             while (iterations <= count) {
                 const UUID = base64.encode(`${this.JobParameters.jobType}-${this.JobParameters.room}-${this.JobParameters.resourceType}-${this.JobParameters.storage}-${iterations}`);
@@ -6663,6 +5148,7 @@ class TransportResourceJob {
                     spawnRoom: this.JobParameters.spawnRoom,
                     jobType: "transportResource",
                     resourceType: this.JobParameters.resourceType,
+                    resourceOrigin: this.JobParameters.resourceOrigin || undefined,
                     storage: this.JobParameters.storage
                 },
                 index,
@@ -6719,17 +5205,33 @@ let SourceOperator = class SourceOperator {
         new MineSourceJob(JobParameters, count);
     }
     createTransportEnergyJob(source) {
-        const storage = findPath.findClosestStorageToRoom(source.pos.roomName);
+        const spawnRoom = findPath.findClosestSpawnToRoom(source.pos.roomName).room;
+        let storage;
+        if (spawnRoom) {
+            if (spawnRoom.storage)
+                storage = spawnRoom.storage;
+        }
+        else {
+            const findStorageResult = findPath.findClosestStorageToRoom(source.pos.roomName);
+            if (findStorageResult) {
+                storage = findStorageResult;
+            }
+        }
         if (storage) {
             const JobParameters = {
                 status: "fetchingResource",
-                spawnRoom: findPath.findClosestSpawnToRoom(source.pos.roomName).pos.roomName,
+                spawnRoom: spawnRoom.name,
                 room: source.pos.roomName,
                 jobType: "transportResource",
                 resourceType: RESOURCE_ENERGY,
                 storage: storage.id
             };
-            const count = creepNumbers[JobParameters.jobType];
+            let count = creepNumbers[JobParameters.jobType];
+            if (creepNumbersOverride[JobParameters.room]) {
+                if (creepNumbersOverride[JobParameters.room][JobParameters.jobType]) {
+                    count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[JobParameters.room][JobParameters.jobType];
+                }
+            }
             new TransportResourceJob(JobParameters, count);
         }
         else {
@@ -6849,7 +5351,12 @@ let SpawnOperator = class SpawnOperator {
                 room: spawn.pos.roomName,
                 jobType: "feedSpawn"
             };
-            const count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[JobParameters.room][JobParameters.jobType];
+            let count = creepNumbers[JobParameters.jobType];
+            if (creepNumbersOverride[JobParameters.room]) {
+                if (creepNumbersOverride[JobParameters.room][JobParameters.jobType]) {
+                    count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[JobParameters.room][JobParameters.jobType];
+                }
+            }
             new FeedSpawnJob(JobParameters, count);
         });
     }
@@ -6862,7 +5369,8 @@ class TerminalEngineerJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -6960,6 +5468,11 @@ let TerminalOperator = class TerminalOperator {
                 terminalId: terminal.id
             };
             let count = creepNumbers[jobParameters.jobType];
+            if (creepNumbersOverride[jobParameters.room]) {
+                if (creepNumbersOverride[jobParameters.room][jobParameters.jobType]) {
+                    count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
+                }
+            }
             const terminalJobs = Object.entries(terminal.room.memory.queues.terminalQueue);
             if (terminalJobs.length === 0) {
                 count = 0;
@@ -7162,6 +5675,8 @@ class Operator {
     }
 }
 
+const roomsToMonitor = [];
+
 let ConstructionSiteMonitor = class ConstructionSiteMonitor {
     constructor(room) {
         this.room = room;
@@ -7187,11 +5702,35 @@ ConstructionSiteMonitor = __decorate([
     profile
 ], ConstructionSiteMonitor);
 
+let DepositMonitor = class DepositMonitor {
+    constructor(deposit) {
+        this.monitorDeposit(deposit);
+    }
+    monitorDeposit(deposit) {
+        if (deposit) {
+            const room = deposit.room;
+            if (room) {
+                if (Memory.rooms[room.name]) {
+                    Memory.rooms[room.name].monitoring.deposit = {
+                        depositId: deposit.id,
+                        cooldown: deposit.cooldown,
+                        depositType: deposit.depositType
+                    };
+                }
+            }
+        }
+    }
+};
+DepositMonitor = __decorate([
+    profile
+], DepositMonitor);
+
 class LootResourceJob {
     constructor(JobParameters, count = 1) {
         this.JobParameters = JobParameters;
         Object.entries(Memory.queues.jobQueue)
-            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+            .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+            jobMemory.jobParameters.room === this.JobParameters.room)
             .forEach(([jobUUID, jobMemory]) => {
             if (jobMemory.index > count) {
                 this.deleteJob(jobUUID);
@@ -7235,6 +5774,8 @@ class LootResourceJob {
     }
 }
 
+const roomsToLoot = [];
+
 let DroppedResourceMonitor = class DroppedResourceMonitor {
     constructor(room) {
         this.room = room;
@@ -7242,7 +5783,12 @@ let DroppedResourceMonitor = class DroppedResourceMonitor {
             this.initializeDroppedResourceMonitorMemory();
             this.monitorDroppedResources();
             this.cleanDroppedResources();
-            this.createLootResourceJob();
+            if (this.room.memory.monitoring.structures.storage) {
+                this.createLootResourceJob();
+            }
+            else if (roomsToLoot.includes(this.room.name)) {
+                this.createTransportEnergyJob();
+            }
         }
     }
     initializeDroppedResourceMonitorMemory() {
@@ -7268,20 +5814,52 @@ let DroppedResourceMonitor = class DroppedResourceMonitor {
         });
     }
     createLootResourceJob() {
-        if (this.room.memory.monitoring.structures.storage) {
-            if (Object.entries(this.room.memory.monitoring.droppedResources).length > 0) {
-                let spawnRoom = this.room.name;
-                if (Object.entries(Memory.rooms[this.room.name].monitoring.structures.spawns).length === 0) {
-                    spawnRoom = findPath.findClosestSpawnToRoom(this.room.name).pos.roomName;
-                }
-                const jobParameters = {
-                    room: spawnRoom,
-                    status: "fetchingResource",
-                    jobType: "lootResource"
-                };
-                const count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
-                new LootResourceJob(jobParameters, count);
+        if (Object.entries(this.room.memory.monitoring.droppedResources).length > 0) {
+            let spawnRoom = this.room.name;
+            if (Object.entries(Memory.rooms[this.room.name].monitoring.structures.spawns).length === 0) {
+                spawnRoom = findPath.findClosestSpawnToRoom(this.room.name).pos.roomName;
             }
+            const jobParameters = {
+                room: spawnRoom,
+                status: "fetchingResource",
+                jobType: "lootResource"
+            };
+            const count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
+            new LootResourceJob(jobParameters, count);
+        }
+    }
+    createTransportEnergyJob() {
+        const spawnRoom = findPath.findClosestSpawnToRoom(this.room.name).room;
+        let storage;
+        if (spawnRoom) {
+            if (spawnRoom.storage)
+                storage = spawnRoom.storage;
+        }
+        else {
+            const findStorageResult = findPath.findClosestStorageToRoom(this.room.name);
+            if (findStorageResult) {
+                storage = findStorageResult;
+            }
+        }
+        if (storage) {
+            const JobParameters = {
+                status: "fetchingResource",
+                spawnRoom: spawnRoom.name,
+                room: this.room.name,
+                jobType: "transportResource",
+                resourceType: RESOURCE_ENERGY,
+                storage: storage.id
+            };
+            let count = creepNumbers[JobParameters.jobType];
+            if (creepNumbersOverride[JobParameters.room]) {
+                if (creepNumbersOverride[JobParameters.room][JobParameters.jobType]) {
+                    count = creepNumbers[JobParameters.jobType] + creepNumbersOverride[JobParameters.room][JobParameters.jobType];
+                }
+            }
+            new TransportResourceJob(JobParameters, count);
+        }
+        else {
+            Log.Alert(`TransportResource Job for room ${this.room.name} cannot find any storage nearby ${this.room.name}!`);
         }
     }
 };
@@ -7592,6 +6170,10 @@ LabMonitor = __decorate([
 ], LabMonitor);
 
 const linkConfig = {
+    W55N12: {
+        "63c3680eb8c6af5bc2ccc67a": "tx",
+        "63c36a1635c945f621a71c39": "rx"
+    },
     W56N12: {
         "6397f1bd30238608dae79135": "tx",
         "63b5d422245b4f17984d7ec3": "tx",
@@ -7669,6 +6251,41 @@ let RoadMonitor = class RoadMonitor {
 RoadMonitor = __decorate([
     profile
 ], RoadMonitor);
+
+let RuinMonitor = class RuinMonitor {
+    constructor(ruin) {
+        this.initalizeRuinMonitorMemory(ruin);
+        this.monitorRuins(ruin);
+    }
+    initalizeRuinMonitorMemory(ruin) {
+        if (ruin.room) {
+            if (!ruin.room.memory.monitoring.structures.ruins) {
+                ruin.room.memory.monitoring.structures.ruins = {};
+            }
+        }
+    }
+    monitorRuins(ruin) {
+        if (ruin) {
+            if (ruin.room) {
+                if (ruin.room.memory.monitoring.structures.ruins) {
+                    const ruinStorage = {};
+                    Object.entries(ruin.store).forEach(([resourceName]) => {
+                        const resourceNameTyped = resourceName;
+                        ruinStorage[resourceName] = { amount: ruin.store[resourceNameTyped] };
+                    });
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                    ruin.room.memory.monitoring.structures.ruins[ruin.id] = {
+                        resources: ruinStorage,
+                        remainingTime: ruin.destroyTime - Game.time
+                    };
+                }
+            }
+        }
+    }
+};
+RuinMonitor = __decorate([
+    profile
+], RuinMonitor);
 
 let SpawnMonitor = class SpawnMonitor {
     // SpawnMonitor Interface
@@ -7810,9 +6427,13 @@ class StructureMonitor {
                 containers: {},
                 labs: {},
                 walls: {},
+                ruins: {},
                 other: {}
             };
             // console.log(JSON.stringify(this.room.find(FIND_STRUCTURES)));
+            this.room.find(FIND_RUINS).forEach(Ruin => {
+                new RuinMonitor(Ruin);
+            });
             this.room.find(FIND_STRUCTURES).forEach(Structure => {
                 switch (Structure.structureType) {
                     default:
@@ -7877,7 +6498,10 @@ class RoomMonitor {
                 if (this.room.controller.my) {
                     this.runChildMonitors();
                 }
-                if (roomsToClaim.includes(this.roomName) || roomsToMine.includes(this.roomName)) {
+                if (roomsToClaim.includes(this.roomName) ||
+                    roomsToMine.includes(this.roomName) ||
+                    roomsToMonitor.includes(this.roomName) ||
+                    roomsToHarvestDeposits.includes(this.roomName)) {
                     this.runChildMonitors();
                 }
             }
@@ -7891,6 +6515,7 @@ class RoomMonitor {
         this.runDroppedResourceMonitors();
         this.runConstructionSiteMonitors();
         this.runMineralMonitors();
+        this.runDepositMonitors();
     }
     runStructureMonitor() {
         if (this.room.controller) {
@@ -7919,6 +6544,11 @@ class RoomMonitor {
     runConstructionSiteMonitors() {
         new ConstructionSiteMonitor(this.room);
     }
+    runDepositMonitors() {
+        this.room.find(FIND_DEPOSITS).forEach(deposit => {
+            new DepositMonitor(deposit);
+        });
+    }
 }
 
 class Monitor {
@@ -7926,8 +6556,9 @@ class Monitor {
         this.monitorRooms();
     }
     monitorRooms() {
-        const roomsToMonitor = roomOperations.generateRoomsArray();
-        roomsToMonitor.forEach(roomName => {
+        let roomMonitorArray = roomOperations.generateRoomsArray();
+        roomMonitorArray = roomMonitorArray.concat(roomsToMonitor);
+        roomMonitorArray.forEach(roomName => {
             new RoomMonitor(roomName);
         });
     }
@@ -7990,6 +6621,7 @@ class RoomMemoryController {
                     towers: {},
                     links: {},
                     containers: {},
+                    ruins: {},
                     labs: {},
                     walls: {},
                     other: {}
@@ -8053,17 +6685,37 @@ class RoomMemoryController {
     }
 }
 
+class PathFinderMemoryController {
+    constructor() {
+        this.maintainPathFinderMemoryHealth();
+    }
+    maintainPathFinderMemoryHealth() {
+        if (!Memory.pathFinding) {
+            this.initializePathFinderMemory();
+        }
+    }
+    initializePathFinderMemory() {
+        Memory.pathFinding = {
+            pathCache: {}
+        };
+    }
+}
+
 class MemoryController {
     constructor() {
         this.maintainMemory();
     }
     maintainMemory() {
+        this.maintainPathMemory();
         this.maintainQueueMemory();
         this.maintainRoomMemory();
         this.maintainCreepMemory();
     }
     maintainQueueMemory() {
         new QueueMemoryController();
+    }
+    maintainPathMemory() {
+        new PathFinderMemoryController();
     }
     maintainCreepMemory() {
         if (!Memory.creeps) {
@@ -8082,7 +6734,8 @@ class MemoryController {
         if (!Memory.rooms) {
             Memory.rooms = {};
         }
-        const roomsToAddToMemory = roomOperations.generateRoomsArray();
+        let roomsToAddToMemory = roomOperations.generateRoomsArray();
+        roomsToAddToMemory = roomsToAddToMemory.concat(roomsToMonitor);
         roomsToAddToMemory.forEach(roomName => {
             new RoomMemoryController(roomName);
         });

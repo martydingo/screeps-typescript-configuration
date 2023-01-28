@@ -1,1 +1,1 @@
-export const roomsToClaim: string[] = ["W55N12"];
+export const roomsToClaim: string[] = [];

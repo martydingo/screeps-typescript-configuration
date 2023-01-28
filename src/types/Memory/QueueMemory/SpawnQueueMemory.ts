@@ -25,7 +25,8 @@ declare global {
         | LabEngineerJobParameters
         | FactoryEngineerJobParameters
         | DefendRoomJobParameters
-        | DismantleEnemyBuildingsJobParameters;
+        | DismantleEnemyBuildingsJobParameters
+        | HarvestDepositJobParameters;
     };
   }
 }

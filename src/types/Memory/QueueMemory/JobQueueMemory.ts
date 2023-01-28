@@ -21,7 +21,8 @@ declare global {
         | LabEngineerJobParameters
         | FactoryEngineerJobParameters
         | DefendRoomJobParameters
-        | DismantleEnemyBuildingsJobParameters;
+        | DismantleEnemyBuildingsJobParameters
+        | HarvestDepositJobParameters;
 
       jobType: string;
       timeAdded: Game["time"];

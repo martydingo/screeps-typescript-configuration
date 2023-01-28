@@ -6,6 +6,7 @@ import { FactoryMonitor } from "./StructureMonitor/FactoryMonitor";
 import { LabMonitor } from "./StructureMonitor/LabMonitor";
 import { LinkMonitor } from "./StructureMonitor/LinkMonitor";
 import { RoadMonitor } from "./StructureMonitor/RoadMonitor";
+import { RuinMonitor } from "./StructureMonitor/RuinMonitor";
 import { SpawnMonitor } from "./StructureMonitor/SpawnMonitor";
 import { StorageMonitor } from "./StructureMonitor/StorageMonitor";
 import { TerminalMonitor } from "./StructureMonitor/TerminalMonitor";
@@ -31,9 +32,13 @@ export class StructureMonitor {
         containers: {},
         labs: {},
         walls: {},
+        ruins: {},
         other: {}
       };
       // console.log(JSON.stringify(this.room.find(FIND_STRUCTURES)));
+      this.room.find(FIND_RUINS).forEach(Ruin => {
+        new RuinMonitor(Ruin);
+      });
       this.room.find(FIND_STRUCTURES).forEach(Structure => {
         switch (Structure.structureType) {
           default:

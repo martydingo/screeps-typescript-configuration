@@ -11,9 +11,6 @@ export class FeedTowerCreep extends BaseCreep {
     if (creep.memory.towerId) {
       const tower = Game.getObjectById(creep.memory.towerId);
       if (tower) {
-        if (creep.memory.status === "recyclingCreep") {
-          creep.memory.status = "working";
-        }
         this.checkIfFull(creep, RESOURCE_ENERGY);
         if (creep.memory.status === "fetchingResource") {
           this.fetchSource(creep);

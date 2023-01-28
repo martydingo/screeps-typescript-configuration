@@ -11,6 +11,9 @@ import { DefendRoomJob } from "classes/Job/DefendRoomJob";
 import { creepNumbers } from "configuration/creeps/creepNumbers";
 import { roomsToDismantleEnemyBuildings } from "configuration/rooms/roomsToDismantleEnemyBuildings";
 import { DismantleEnemyBuildingsJob } from "classes/Job/DismantleEnemyBuildingsJob";
+import { creepNumbersOverride } from "configuration/rooms/creepNumbersOverride";
+import { HarvestDepositJob } from "classes/Job/HarvestDepositJob";
+import { roomsToHarvestDeposits } from "configuration/rooms/roomsToHarvestDeposits";
 
 @profile
 export class RoomOperator {
@@ -20,6 +23,7 @@ export class RoomOperator {
     const roomsToOperate: string[] = roomOperations.generateRoomsArray();
     roomsToOperate.forEach(roomName => {
       this.maintainDefendRoomJobs(roomName);
+      this.maintainHarvestDepositJob(roomName);
       // console.log(`${Game.time.toString()} - ${roomName}`);
       const room = Game.rooms[roomName];
       if (room) {
@@ -32,13 +36,25 @@ export class RoomOperator {
               this.createClaimRoomJob(roomName);
             }
             if (roomOperations.generateRoomsArray("mine").includes(roomName)) {
-              if (!(room.controller?.reservation?.username === myScreepsUsername)) {
-                if (room.controller?.upgradeBlocked) {
-                  if (room.controller?.upgradeBlocked < 150) {
-                    this.createReserveRoomJob(roomName);
-                  }
-                } else {
+              if (roomController.reservation?.username !== myScreepsUsername) {
+                if (!roomController.upgradeBlocked) {
                   this.createReserveRoomJob(roomName);
+                } else {
+                  if (roomController.upgradeBlocked < 150) {
+                    this.createReserveRoomJob(roomName);
+                  } else {
+                    this.deleteReserveRoomJob(roomName);
+                  }
+                }
+              } else {
+                if (!roomController.reservation) {
+                  this.createReserveRoomJob(roomName);
+                } else {
+                  if (roomController.reservation.ticksToEnd < 1500) {
+                    this.createReserveRoomJob(roomName);
+                  } else {
+                    this.deleteReserveRoomJob(roomName);
+                  }
                 }
               }
             }
@@ -59,6 +75,36 @@ export class RoomOperator {
     };
     new ScoutRoomJob(jobParameters);
   }
+  private maintainHarvestDepositJob(roomName: string): void {
+    const depositMonitorMemory = Memory.rooms[roomName].monitoring.deposit;
+    if (depositMonitorMemory) {
+      const depositId = depositMonitorMemory.depositId;
+      if (depositId) {
+        const storage = findPath.findClosestStorageToRoom(roomName);
+        if (storage) {
+          const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+          const jobParameters: HarvestDepositJobParameters = {
+            jobType: "harvestDeposit",
+            status: "movingIntoRoom",
+            room: roomName,
+            spawnRoom,
+            depositId,
+            storage: storage.id
+          };
+          const count = creepNumbers[jobParameters.jobType];
+          new HarvestDepositJob(jobParameters, count);
+        }
+      }
+    }
+    Object.entries(Memory.queues.jobQueue)
+      .filter(([, jobQueueEntry]) => jobQueueEntry.jobType === "harvestDeposits")
+      .forEach(([jobQueueUUID, jobQueueEntry]) => {
+        if (!roomsToHarvestDeposits.includes(jobQueueEntry.room)) {
+          delete Memory.queues.jobQueue[jobQueueUUID];
+        }
+      });
+  }
+
   private maintainTankRoomJobs(): void {
     roomsToTank.forEach(roomName => {
       const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
@@ -126,40 +172,48 @@ export class RoomOperator {
       room: roomName,
       spawnRoom
     };
-    new ClaimRoomJob(jobParameters);
+    const count = creepNumbers[jobParameters.jobType] + creepNumbersOverride[jobParameters.room][jobParameters.jobType];
+    new ClaimRoomJob(jobParameters, count);
   }
-  private createReserveRoomJob(roomName: string): void {
-    let postponeCreate = false;
-    const room = Game.rooms[roomName];
-    if (room) {
-      if (room.controller) {
-        if (room.controller.upgradeBlocked) {
-          if (room.controller.upgradeBlocked > 150) {
-            postponeCreate = true;
-          }
-          if (room.controller.reservation) {
-            if (room.controller.reservation.username === myScreepsUsername) {
-              if (room.controller.reservation.ticksToEnd > 1000) {
-                postponeCreate = true;
-              }
-            }
-          }
-        }
-      }
-    } else {
-      postponeCreate = true;
-    }
+  private deleteClaimRoomJob(roomName: string): void {
     const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
-    const jobParameters: ReserveRoomJobParameters = {
-      jobType: "reserveRoom",
+    const jobParameters: ClaimRoomJobParameters = {
+      jobType: "claimRoom",
       status: "movingIntoRoom",
       room: roomName,
       spawnRoom
     };
-    if (!postponeCreate) {
-      new ReserveRoomJob(jobParameters);
-    } else {
-      new ReserveRoomJob(jobParameters, 0);
+    new ClaimRoomJob(jobParameters, 0);
+  }
+  private createReserveRoomJob(roomName: string): void {
+    const room = Game.rooms[roomName];
+    if (room) {
+      if (room.controller) {
+        const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+        const jobParameters: ReserveRoomJobParameters = {
+          jobType: "reserveRoom",
+          status: "movingIntoRoom",
+          room: roomName,
+          spawnRoom
+        };
+        const count = creepNumbers[jobParameters.jobType];
+        new ReserveRoomJob(jobParameters);
+      }
+    }
+  }
+  private deleteReserveRoomJob(roomName: string): void {
+    const room = Game.rooms[roomName];
+    if (room) {
+      if (room.controller) {
+        const spawnRoom = findPath.findClosestSpawnToRoom(roomName).pos.roomName;
+        const jobParameters: ReserveRoomJobParameters = {
+          jobType: "reserveRoom",
+          status: "movingIntoRoom",
+          room: roomName,
+          spawnRoom
+        };
+        new ReserveRoomJob(jobParameters, 0);
+      }
     }
   }
 }

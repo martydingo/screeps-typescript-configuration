@@ -2,6 +2,7 @@
 import { fetchBodyPartCost } from "common/fetchbodyPartCost";
 import { fetchBodyParts } from "common/fetchBodyParts";
 import { findPath } from "common/findPath";
+import { pathFinder } from "common/pathFinder/pathFinder";
 import { movePathColors } from "configuration/visual/movePathColors";
 import { profile } from "Profiler";
 import { Log } from "./Log";
@@ -31,47 +32,34 @@ export class BaseCreep {
       }
     }
   }
-
-  public checkIfFull(creep: Creep, resource?: ResourceConstant): void {
+  public checkIfFull(creep: Creep, resource: ResourceConstant): void {
     if (creep.memory.status === "fetchingResource") {
-      if (resource) {
-        if (creep.store.getFreeCapacity(resource) === 0) {
-          if (creep.store.getCapacity(resource) === creep.store[resource]) {
-            creep.memory.status = "working";
-          } else {
-            if (creep.store.getFreeCapacity(resource) === 0) {
-              Object.entries(creep.store).forEach(([resourceType]) => {
-                if (resourceType !== resource) {
-                  if (resourceType === RESOURCE_ENERGY) {
-                    if (creep.room.storage) {
-                      this.depositResource(creep, creep.room.storage, resourceType);
-                    }
+      if (creep.store.getFreeCapacity(resource) === 0) {
+        if (creep.store.getCapacity(resource) === creep.store[resource]) {
+          creep.memory.status = "working";
+        } else {
+          if (creep.store.getFreeCapacity(resource) === 0) {
+            Object.entries(creep.store).forEach(([resourceType]) => {
+              if (resourceType !== resource) {
+                if (resourceType === RESOURCE_ENERGY) {
+                  if (creep.room.storage) {
+                    this.depositResource(creep, creep.room.storage, resourceType);
+                  }
+                } else {
+                  if (creep.room.terminal) {
+                    this.depositResource(creep, creep.room.terminal, resourceType as ResourceConstant);
                   } else {
-                    if (creep.room.terminal) {
-                      this.depositResource(creep, creep.room.terminal, resourceType as ResourceConstant);
-                    } else {
-                      creep.drop(resourceType as ResourceConstant);
-                    }
+                    creep.drop(resourceType as ResourceConstant);
                   }
                 }
-              });
-            }
+              }
+            });
           }
-        }
-      } else {
-        if (creep.store.getFreeCapacity() === 0) {
-          creep.memory.status = "working";
         }
       }
     } else if (creep.memory.status === "working") {
-      if (resource) {
-        if (creep.store[resource] === 0 && creep.store.getFreeCapacity(resource) > 0) {
-          creep.memory.status = "fetchingResource";
-        }
-      } else {
-        if (creep.store.getFreeCapacity() > 0) {
-          creep.memory.status = "fetchingResource";
-        }
+      if (creep.store[resource] === 0 && creep.store.getFreeCapacity(resource) > 0) {
+        creep.memory.status = "fetchingResource";
       }
     }
   }
@@ -158,27 +146,31 @@ export class BaseCreep {
     return safeRoute;
   }
   public moveCreep(creep: Creep, destination: RoomPosition): ScreepsReturnCode {
-    // console.log(`${creep.memory.room} - ${creep.memory.jobType} - ${creep.pos} - ${destination}`);
-    const moveResult = creep.moveTo(destination, {
-      visualizePathStyle: {
-        fill: "transparent",
-        stroke: movePathColors[creep.memory.jobType],
-        lineStyle: "dotted",
-        strokeWidth: 0.1,
-        opacity: 0.66
-      }
-    });
-
-    return moveResult;
-  }
-  public harvestDeposit(creep: Creep, deposit: Deposit): ScreepsReturnCode {
-    const harvestResult = creep.harvest(deposit);
-    if (harvestResult === ERR_NOT_IN_RANGE) {
-      const moveResult = this.moveCreep(creep, deposit.pos);
-      return moveResult;
-    } else {
-      return harvestResult;
+    if (creep.fatigue === 0) {
+      const pathFind = new pathFinder();
+      const nextMoveDirection = pathFind.fetchDirection(creep.pos, destination);
+      const curCreepPos = creep.pos;
+      // const moveOptions = {
+      //   visualizePathStyle: {
+      //     fill: "transparent",
+      //     stroke: movePathColors[creep.memory.jobType],
+      //     lineStyle: "dotted",
+      //     strokeWidth: 0.1,
+      //     opacity: 0.66
+      //   }
+      // };
+      const moveResult = creep.move(nextMoveDirection);
+      `first moveResult for creep ${creep.pos} with role ${creep.memory.jobType}: ${moveResult}`;
+      // const newCreepPos = creep.pos;
+      // if (newCreepPos === curCreepPos) {
+      //   pathFind.fetchDirection(creep.pos, destination, true);
+      //   const moveResult = creep.move(nextMoveDirection);
+      //   console.log(
+      //     `Regenerated path, second moveResult for creep ${creep.pos} with role ${creep.memory.jobType}: ${moveResult}`
+      //   );
+      // }
     }
+    return -11;
   }
   public harvestSource(creep: Creep, source: Source): ScreepsReturnCode {
     const harvestResult = creep.harvest(source);

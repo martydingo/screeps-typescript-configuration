@@ -10,7 +10,7 @@ export class LootResourceCreep extends BaseCreep {
   private runCreep(creep: Creep) {
     this.checkIfFull(creep, RESOURCE_ENERGY);
     if (creep.memory.status === "fetchingResource") {
-      const resourceArray: Resource<ResourceConstant>[] = [];
+      const droppedResourceArray: Resource<ResourceConstant>[] = [];
       Object.entries(creep.room.memory.monitoring.droppedResources)
         .sort(
           ([, droppedResourceEntryA], [, droppedResourceEntryB]) =>
@@ -20,10 +20,10 @@ export class LootResourceCreep extends BaseCreep {
           const resourceId = resourceIdString as Id<Resource<ResourceConstant>>;
           const resource = Game.getObjectById(resourceId);
           if (resource) {
-            resourceArray.push(resource);
+            droppedResourceArray.push(resource);
           }
         });
-      const nextResource = resourceArray[0];
+      const nextResource = droppedResourceArray[0];
       if (nextResource) {
         this.pickupResource(creep, nextResource);
       }

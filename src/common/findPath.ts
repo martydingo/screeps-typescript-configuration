@@ -20,37 +20,27 @@ export const findPath = {
     Object.entries(Game.spawns)
       .filter(([, spawn]) => spawn.isActive())
       .forEach(([spawnName, spawn]) => {
-        let cost = 0;
-        Game.map.findRoute(spawn.pos.roomName, roomName, {
-          routeCallback(): void {
-            cost = cost + 1;
-          }
-        });
-        spawnDistanceMatrix[spawnName] = cost;
+        const routeToSpawn = Game.map.findRoute(spawn.pos.roomName, roomName);
+
+        spawnDistanceMatrix[spawnName] = Object.entries(routeToSpawn).length;
       });
-    Object.entries(spawnDistanceMatrix).sort(
-      ([spawnNameA], [spawnNameB]) => spawnDistanceMatrix[spawnNameB] - spawnDistanceMatrix[spawnNameA]
-    );
-    const spawnName = Object.entries(spawnDistanceMatrix)[0][0];
+    const spawnName = Object.entries(spawnDistanceMatrix).sort(
+      ([spawnNameA], [spawnNameB]) => spawnDistanceMatrix[spawnNameA] - spawnDistanceMatrix[spawnNameB]
+    )[0][0];
+
     return Game.spawns[spawnName];
   },
   findClosestStorageToRoom(originRoomName: string) {
     const storageDistanceMatrix: { [key: string]: number } = {};
     Object.entries(Game.rooms).forEach(([roomName, room]) => {
       if (room.storage && room.storage.my) {
-        let cost = 0;
-        Game.map.findRoute(originRoomName, roomName, {
-          routeCallback(): void {
-            cost = cost + 1;
-          }
-        });
-        storageDistanceMatrix[roomName] = cost;
+        const routeToStorage = Game.map.findRoute(originRoomName, roomName);
+        storageDistanceMatrix[roomName] = Object.entries(routeToStorage).length;
       }
     });
-    Object.entries(storageDistanceMatrix).sort(
+    const storageRoom = Object.entries(storageDistanceMatrix).sort(
       ([storageRoomA], [storageRoomB]) => storageDistanceMatrix[storageRoomA] - storageDistanceMatrix[storageRoomB]
-    );
-    const storageRoom = Object.entries(storageDistanceMatrix)[0][0];
+    )[0][0];
 
     return Game.rooms[storageRoom].storage;
   },

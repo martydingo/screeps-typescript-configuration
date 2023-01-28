@@ -14,19 +14,30 @@ export class TransportResourceCreep extends BaseCreep {
         this.moveHome(creep);
         creep.memory.status = "fetchingResource";
       } else {
-        const resourceArray: Resource[] = [];
-        Object.entries(creep.room.memory.monitoring.droppedResources)
-          .filter(([, resourceMemory]) => resourceMemory.resourceType === creep.memory.resourceType)
-          .forEach(([resourceIdString]) => {
-            const resourceId = resourceIdString as Id<Resource<ResourceConstant>>;
-            const resource = Game.getObjectById(resourceId);
-            if (resource) {
-              resourceArray.push(resource);
+        if (!creep.memory.resourceOrigin) {
+          const droppedResourceArray: Resource[] = [];
+          Object.entries(creep.room.memory.monitoring.droppedResources)
+            .filter(([, DroppedResource]) => DroppedResource.resourceType === creep.memory.resourceType)
+            .forEach(([resourceIdString]) => {
+              const resourceId = resourceIdString as Id<Resource<ResourceConstant>>;
+              const resource = Game.getObjectById(resourceId);
+              if (resource) {
+                droppedResourceArray.push(resource);
+              }
+            });
+          const largestResource = droppedResourceArray.sort(
+            (droppedResourceA, droppedResourceB) => droppedResourceB.amount - droppedResourceA.amount
+          )[0];
+          if (largestResource) {
+            this.pickupResource(creep, largestResource);
+          }
+        } else {
+          const resourceContainer = Game.getObjectById(creep.memory.resourceOrigin);
+          if (resourceContainer) {
+            if (creep.memory.resourceType) {
+              this.withdrawResource(creep, resourceContainer, creep.memory.resourceType);
             }
-          });
-        const nearestResource = creep.pos.findClosestByPath(resourceArray);
-        if (nearestResource) {
-          this.pickupResource(creep, nearestResource);
+          }
         }
       }
     } else if (creep.memory.status === "working") {

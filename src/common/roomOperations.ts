@@ -1,4 +1,5 @@
 import { roomsToClaim } from "configuration/rooms/roomsToClaim";
+import { roomsToHarvestDeposits } from "configuration/rooms/roomsToHarvestDeposits";
 import { roomsToMine } from "configuration/rooms/roomsToMine";
 
 export const roomOperations = {
@@ -10,11 +11,16 @@ export const roomOperations = {
       } else {
         if (roomOperation === "claim") {
           roomsArray = roomsToClaim;
+        } else {
+          if (roomOperation === "harvestDeposits") {
+            roomsArray = roomsToHarvestDeposits;
+          }
         }
       }
     } else {
       roomsArray = roomsArray.concat(roomsToMine);
       roomsArray = roomsArray.concat(roomsToClaim);
+      roomsArray = roomsArray.concat(roomsToHarvestDeposits);
       Object.entries(Game.rooms).forEach(([roomName, room]) => {
         let monitorRoom = false;
         if (room) {

@@ -6,7 +6,11 @@ export class DefendRoomJob {
   public constructor(JobParameters: DefendRoomJobParameters, count = 1) {
     this.JobParameters = JobParameters;
     Object.entries(Memory.queues.jobQueue)
-      .filter(([, jobMemory]) => jobMemory.jobParameters.jobType === this.JobParameters.jobType)
+      .filter(
+        ([, jobMemory]) =>
+          jobMemory.jobParameters.jobType === this.JobParameters.jobType &&
+          jobMemory.jobParameters.room === this.JobParameters.room
+      )
       .forEach(([jobUUID, jobMemory]) => {
         if (jobMemory.index > count) {
           this.deleteJob(jobUUID);

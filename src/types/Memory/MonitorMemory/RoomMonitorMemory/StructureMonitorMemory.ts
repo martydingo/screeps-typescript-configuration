@@ -11,6 +11,7 @@ declare global {
     towers: TowerMonitorMemory;
     storage?: StorageMonitorMemory;
     containers: ContainerMonitorMemory;
+    ruins: RuinMonitorMemory;
     roads: RoadMonitorMemory;
     links: LinkMonitorMemory;
     walls: WallMonitorMemory;
